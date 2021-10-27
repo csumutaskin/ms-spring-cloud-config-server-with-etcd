@@ -21,3 +21,16 @@
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
+
+# Eclipse Related #
+.checkstyle
+.classpath
+.project
+.settings/
+
+# Maven and Project Related
+
+bin/
+target/
+ms-spring-cloud-config-server-with-etcd-cs-cleanup.xml
+ms-spring-cloud-config-server-with-etcd-cs-formatter.xml
