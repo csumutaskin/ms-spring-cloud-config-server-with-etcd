@@ -5,11 +5,6 @@ spring:
       password: umut
   profiles:
     active: native,dev,test
-  cloud:
-    config:
-      server:
-        native:
-          searchLocations: file:///C:/Dev/git/framework/sample-local-git-repo/
 management:
   security:
     enabled: false          
