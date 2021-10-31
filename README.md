@@ -3,6 +3,8 @@ Spring Cloud Config Server with etcd as data store
 
 still being implemented..
 
+*Currently supports etcd v3 API
+
 docker compose for rabbitmq:
 
 version: '2'
