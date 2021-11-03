@@ -1,147 +1,201 @@
 package com.noap.msfrw.etcd.util;
 
-import java.net.URI;
-import java.util.Collection;
-import java.util.HashMap;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import io.etcd.jetcd.ByteSequence;
 import io.etcd.jetcd.Client;
+import io.etcd.jetcd.ClientBuilder;
 import io.etcd.jetcd.KeyValue;
-import io.etcd.jetcd.Util;
-import io.etcd.jetcd.Watch;
+import io.etcd.jetcd.Watch.Watcher;
 import io.etcd.jetcd.kv.GetResponse;
 import io.etcd.jetcd.options.GetOption;
+import io.etcd.jetcd.options.WatchOption;
 import io.etcd.jetcd.watch.WatchEvent;
+import io.etcd.jetcd.watch.WatchResponse;
 
 /**
  * Etcd Connector Utility Class
+ * 
  * @author UMUT
  *
  */
 public class EtcdConnector {
-	
-	Logger logger = LoggerFactory.getLogger(EtcdConnector.class);
-	
-	private String etcdUrl; //"http://192.168.1.100:2379"
-	private Client etcdClient;
-	
-	public EtcdConnector(String etcdUrl) {
-		this.etcdUrl = etcdUrl;		
-	}
-	
-	public boolean connect() {
-		etcdClient = Client.builder().endpoints("http://192.168.1.100:2379","http://192.168.1.100:2381","http://192.168.1.100:2383").build();
-		return true;
-	}
-	
-	public Map<String, String> getAllKeyValues() {
-		
-		checkConnection();
-		ByteSequence key = ByteSequence.from("\0".getBytes());
 
-		GetOption option = GetOption.newBuilder().withSortField(GetOption.SortTarget.KEY)
-				.withSortOrder(GetOption.SortOrder.DESCEND).withRange(key).build();
-		
-		CompletableFuture<GetResponse> futureResponse = etcdClient.getKVClient().get(key, option);
+  Logger logger = LoggerFactory.getLogger(EtcdConnector.class);
 
-		GetResponse response;
-		try {
-			response = futureResponse.get();
-		} catch (InterruptedException | ExecutionException e) {
-			//convert to EtcdConnectException
-			throw new RuntimeException(String.format("An exception occurred while retrieving all the key value pairs from the etcd cluster: %s, detail is: %s", etcdUrl, ExceptionUtils.getStackTrace(e))); 
-		}
+  private String[] etcdUrls;
+  private Client etcdClient;
 
-		if (response.getKvs().isEmpty()) {
-			logger.info("Etcd cluster contains no data yet");
-			return new ConcurrentHashMap<>();
-		}
+  public EtcdConnector(String... etcdUrls) {
+    this.etcdUrls = etcdUrls;
+  }
 
-		Map<String, String> keyValueMap = new ConcurrentHashMap<>();
-		for (KeyValue kv : response.getKvs()) {
-			keyValueMap.put(kv.getKey().toString(), kv.getValue().toString());
-		}
-		return keyValueMap;
-	}
-	
-	public String getValue(String keyString) {
+  /**
+   * Prepares a connection to an ETCD cluster.
+   * 
+   * @param username user name for ETCD connection
+   * @param pssword password for ETCD connection
+   * @param keepAliveTimeInSeconds if null default is used : 30 seconds
+   * @param keepAliveTimeoutInSeconds if null default is used: 10 seconds
+   * @return true if connection builder is built.
+   */
+  public boolean connect(String username, String pssword, Long keepAliveTimeInSeconds,
+      Long keepAliveTimeoutInSeconds) {
+    ClientBuilder builder = Client.builder();
+    if (StringUtils.isNotEmpty(username)) {
+      ByteSequence userNameByteSeq = ByteSequence.from(username.getBytes());
+      builder = builder.user(userNameByteSeq);
+    }
+    if (StringUtils.isNotEmpty(pssword)) {
+      ByteSequence psswordByteSeq = ByteSequence.from(pssword.getBytes());
+      builder = builder.password(psswordByteSeq);
+    }
+    if (keepAliveTimeInSeconds != null) {
+      builder = builder.keepaliveTime(Duration.ofSeconds(keepAliveTimeInSeconds));
+    }
+    if (keepAliveTimeoutInSeconds != null) {
+      builder = builder.keepaliveTimeout(Duration.ofSeconds(keepAliveTimeoutInSeconds));
+    }
+    etcdClient = builder.endpoints(etcdUrls).build();
+    return true;
+  }
 
-		checkConnection();
-		
-		ByteSequence key = ByteSequence.from(keyString.getBytes());
-		GetOption option = GetOption.newBuilder().withRange(key).build();
-		CompletableFuture<GetResponse> futureResponse = etcdClient.getKVClient().get(key, option);
+  /**
+   * Returns all key values stored in the ETCD cluster connected.
+   * 
+   * @return map of key value pairs stored.
+   */
+  public Map<String, String> getAllKeyValues() {
 
-		GetResponse response;
-		try {
-			
-			response = futureResponse.get();
-		} catch (InterruptedException | ExecutionException e) {
-			
-			//convert to EtcdConnectException
-			throw new RuntimeException(String.format("An exception occurred while retrieving a key from the etcd cluster: %s, detail is: %s", etcdUrl, ExceptionUtils.getStackTrace(e))); 
-		}
+    checkConnection();
 
-		if (response.getKvs().isEmpty()) {
-			return null;
-		}
-		return response.getKvs().get(0).getValue().toString();
-	}
-	
-	public void listen() {
-		
-		  ByteSequence key = ByteSequence.from("sample.value".getBytes());
-			
-			CountDownLatch latch = new CountDownLatch(Integer.MAX_VALUE);
-			// ByteSequence key = ByteSequence.from(cmd.key, StandardCharsets.UTF_8);
-			Collection<URI> endpoints = Util.toURIs(Stream.of("http://192.168.1.100:2379").collect(Collectors.toList()));
+    Map<String, String> keyValueMap = new ConcurrentHashMap<>();
+    ByteSequence keyAsStartStr = ByteSequence.from("\0".getBytes());
+    GetOption option = GetOption.newBuilder().withSortField(GetOption.SortTarget.KEY)
+        .withSortOrder(GetOption.SortOrder.DESCEND).withRange(keyAsStartStr).build();
+    CompletableFuture<GetResponse> futureResponse =
+        etcdClient.getKVClient().get(keyAsStartStr, option);
 
-			Watch.Listener listener = Watch.listener(responsex -> {
-				System.out.println("Watching for key: test_key");
+    GetResponse response = null;
+    try {
+      response = futureResponse.get();
+    } catch (InterruptedException ie) {
+      logger.warn("An Interruption : ", ie);
+      Thread.currentThread().interrupt();
+    } catch (ExecutionException ee) {
+      String errorMessage = String.format(
+          "An exception occurred while retrieving all the key value pairs from the etcd cluster: %s",
+          String.join(",", etcdUrls));
+      throw new EtcdException(errorMessage, ee);
+    }
 
-				for (WatchEvent event : responsex.getEvents()) {
-					/*
-					 * LOGGER.info("type={}, key={}, value={}", event.getEventType(),
-					 * Optional.ofNullable(event.getKeyValue().getKey()).map(bs ->
-					 * bs.toString(StandardCharsets.UTF_8)).orElse(""),
-					 * Optional.ofNullable(event.getKeyValue().getValue()).map(bs ->
-					 * bs.toString(StandardCharsets.UTF_8)) .orElse(""));
-					 */
-					System.out.println(
-							"Event !!!!!!: " + event.getKeyValue().getKey() + " " + event.getKeyValue().getValue());
-				}
-				
-				
-//				publishEventByPath();
-				latch.countDown();
-			});
+    if (response == null || response.getKvs().isEmpty()) {
+      if (logger.isInfoEnabled()) {
+        logger.info(String.format("Etcd cluster at: %s contains no key value data yet...",
+            String.join(",", etcdUrls)));
+      }
+      return keyValueMap;
+    }
 
-			try (Client clientx = Client.builder().endpoints(endpoints).build();
-					Watch watch = clientx.getWatchClient();
-					Watch.Watcher watcher = watch.watch(key, listener)) {
+    for (KeyValue kv : response.getKvs()) {
+      keyValueMap.put(kv.getKey().toString(), kv.getValue().toString());
+    }
+    return keyValueMap;
+  }
 
-				latch.await();
-			} catch (Exception e) {
-				System.out.println(e);
-				System.exit(1);
-			}
-	}
-	
-	private void checkConnection() {
-		
-		if(etcdClient == null) {
-			throw new RuntimeException("Before retrieving keys of a etcd cluster, call connect() method first."); //convert to EtcdConnectException
-		}
-	}
+  /**
+   * Returns desired key and value stored in the ETCD cluster connected, null if no key is found.
+   * 
+   * @return map of key value pairs stored.
+   */
+  public String getValue(String keyString) {
+
+    checkConnection();
+
+    ByteSequence key = ByteSequence.from(keyString.getBytes());
+    GetOption option = GetOption.newBuilder().withRange(key).build();
+    CompletableFuture<GetResponse> futureResponse = etcdClient.getKVClient().get(key, option);
+
+    GetResponse response = null;
+    try {
+      response = futureResponse.get();
+    } catch (InterruptedException ie) {
+      logger.warn("An Interruption: ", ie);
+      Thread.currentThread().interrupt();
+    } catch (ExecutionException ee) {
+      String errorMessage = String.format(
+          "An exception occurred while retrieving key value pair with key: %s from the etcd cluster: %s",
+          keyString, String.join(",", etcdUrls));
+      throw new EtcdException(errorMessage, ee);
+    }
+
+    if (response == null || response.getKvs().isEmpty()) {
+      return null;
+    }
+    return response.getKvs().get(0).getValue().toString();
+  }
+
+  /**
+   * A watcher initialization for all keys in the ETCD cluster.
+   */
+  public void startListening() {
+
+    CountDownLatch latch = new CountDownLatch(Integer.MAX_VALUE);
+    ByteSequence keyString = ByteSequence.from("\0".getBytes());
+
+    Watcher watcher = null;
+    try {
+      WatchOption option = WatchOption.newBuilder().withRange(keyString).build();
+      watcher = etcdClient.getWatchClient().watch(keyString, option, response -> {
+        runCallBackForWatchEvent(latch, response);
+      });
+      latch.await();
+    } catch (InterruptedException ie) {
+      logger.warn("An Interruption: ", ie);
+      Thread.currentThread().interrupt();
+    } catch (Exception e) {
+      String errorMessage =
+          String.format("An exception occurred while watching ETCD @: %s, detail is: %s",
+              String.join(",", etcdUrls), ExceptionUtils.getStackTrace(e));
+      logger.error(errorMessage);
+    } finally {
+      if (watcher != null) {
+        watcher.close();
+      }
+    }
+  }
+
+  private void runCallBackForWatchEvent(CountDownLatch latch, WatchResponse response) {
+
+    logger.info("******************* CALLBACK CALLED: *************************************");
+    logger.info("");
+    for (WatchEvent event : response.getEvents()) {
+      logger.info("----------------------------------");
+      logger.info("Event type: {}", event.getEventType());
+      logger.info("Watching for key: {}", event.getKeyValue().getKey());
+      logger.info("Value: {}", event.getKeyValue().getValue());
+      logger.info("Latch values: {}", latch.getCount());
+
+      // key => Optional.ofNullable(event.getKeyValue().getKey()).map(bs ->
+      // bs.toString(StandardCharsets.UTF_8)).orElse("")
+      // value => Optional.ofNullable(event.getKeyValue().getValue()).map(bs ->
+      // bs.toString(StandardCharsets.UTF_8)) .orElse(""));
+    }
+    latch.countDown();
+  }
+
+  private void checkConnection() {
+    if (etcdClient == null) {
+      throw new EtcdException(
+          "Connection to the ETCD cluster is null, call connect() method first.");
+    }
+  }
 }
