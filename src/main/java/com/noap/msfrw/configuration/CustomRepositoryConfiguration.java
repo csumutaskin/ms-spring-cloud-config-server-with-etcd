@@ -6,7 +6,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.cloud.bus.BusProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
 import com.noap.msfrw.etcd.repository.EtcdEnvironmentRepository;
 
 /**
@@ -18,16 +17,16 @@ import com.noap.msfrw.etcd.repository.EtcdEnvironmentRepository;
 @Configuration
 public class CustomRepositoryConfiguration {
 
-	@Bean
-	@ConditionalOnBean(BusProperties.class)
-	public EtcdEnvironmentRepository etcdEnvironmentWithBusProperties(BusProperties busProperties) {
-		return new EtcdEnvironmentRepository(busProperties.getId());
-	}
+  @Bean
+  @ConditionalOnBean(BusProperties.class)
+  public EtcdEnvironmentRepository etcdEnvironmentWithBusProperties(BusProperties busProperties) {
+    return new EtcdEnvironmentRepository(busProperties.getId());
+  }
 
-	@Bean
-	@ConditionalOnMissingBean(BusProperties.class)
-	public EtcdEnvironmentRepository etcdEnvironmentWithoutBusProperties(@Value("${spring.cloud.bus.id:application}") String id) {
-		return new EtcdEnvironmentRepository(id);
-	}
-	
+  @Bean
+  @ConditionalOnMissingBean(BusProperties.class)
+  public EtcdEnvironmentRepository etcdEnvironmentWithoutBusProperties(
+      @Value("${spring.cloud.bus.id:application}") String id) {
+    return new EtcdEnvironmentRepository(id);
+  }
 }

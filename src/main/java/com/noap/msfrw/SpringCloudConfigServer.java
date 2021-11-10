@@ -13,9 +13,9 @@ import org.springframework.context.annotation.ComponentScan;
  */
 @SpringBootApplication
 @EnableConfigServer
-@ComponentScan({"com.noap.msfrw.configuration"})
+@ComponentScan({"com.noap.msfrw"})
 public class SpringCloudConfigServer {
-	public static void main(String[] args) {
-		SpringApplication.run(SpringCloudConfigServer.class, args);
-	}
+  public static void main(String[] args) {
+    SpringApplication.run(SpringCloudConfigServer.class, args);
+  }
 }

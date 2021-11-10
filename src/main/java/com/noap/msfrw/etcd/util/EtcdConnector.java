@@ -6,10 +6,14 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.noap.msfrw.etcd.repository.EtcdEnvironmentRepository;
 import io.etcd.jetcd.ByteSequence;
 import io.etcd.jetcd.Client;
 import io.etcd.jetcd.ClientBuilder;
@@ -19,10 +23,11 @@ import io.etcd.jetcd.kv.GetResponse;
 import io.etcd.jetcd.options.GetOption;
 import io.etcd.jetcd.options.WatchOption;
 import io.etcd.jetcd.watch.WatchEvent;
+import io.etcd.jetcd.watch.WatchEvent.EventType;
 import io.etcd.jetcd.watch.WatchResponse;
 
 /**
- * Etcd Connector Utility Class
+ * Etcd Connector Utility Class.
  * 
  * @author UMUT
  *
@@ -33,6 +38,7 @@ public class EtcdConnector {
 
   private String[] etcdUrls;
   private Client etcdClient;
+  private boolean isListening = false;
 
   public EtcdConnector(String... etcdUrls) {
     this.etcdUrls = etcdUrls;
@@ -40,7 +46,7 @@ public class EtcdConnector {
 
   /**
    * Prepares a connection to an ETCD cluster.
-   * 
+   *
    * @param username user name for ETCD connection
    * @param pssword password for ETCD connection
    * @param keepAliveTimeInSeconds if null default is used : 30 seconds
@@ -70,7 +76,7 @@ public class EtcdConnector {
 
   /**
    * Returns all key values stored in the ETCD cluster connected.
-   * 
+   *
    * @return map of key value pairs stored.
    */
   public Map<String, String> getAllKeyValues() {
@@ -113,7 +119,7 @@ public class EtcdConnector {
 
   /**
    * Returns desired key and value stored in the ETCD cluster connected, null if no key is found.
-   * 
+   *
    * @return map of key value pairs stored.
    */
   public String getValue(String keyString) {
@@ -146,34 +152,68 @@ public class EtcdConnector {
   /**
    * A watcher initialization for all keys in the ETCD cluster.
    */
-  public void startListening() {
+  public synchronized void startListening(EtcdEnvironmentRepository repository) {
 
-    CountDownLatch latch = new CountDownLatch(Integer.MAX_VALUE);
-    ByteSequence keyString = ByteSequence.from("\0".getBytes());
-
-    Watcher watcher = null;
-    try {
-      WatchOption option = WatchOption.newBuilder().withRange(keyString).build();
-      watcher = etcdClient.getWatchClient().watch(keyString, option, response -> {
-        runCallBackForWatchEvent(latch, response);
-      });
-      latch.await();
-    } catch (InterruptedException ie) {
-      logger.warn("An Interruption: ", ie);
-      Thread.currentThread().interrupt();
-    } catch (Exception e) {
-      String errorMessage =
-          String.format("An exception occurred while watching ETCD @: %s, detail is: %s",
-              String.join(",", etcdUrls), ExceptionUtils.getStackTrace(e));
-      logger.error(errorMessage);
-    } finally {
-      if (watcher != null) {
-        watcher.close();
-      }
+    if (isListening) {
+      logger.info("Watcher is already listening the etcd instance");
+      return;
     }
+    checkConnection();
+    ExecutorService es = Executors.newSingleThreadExecutor();
+
+    System.out.println("Umut1");
+    try {
+      es.execute(() -> {
+
+        CountDownLatch latch = new CountDownLatch(Integer.MAX_VALUE);
+        ByteSequence keyString = ByteSequence.from("\0".getBytes());
+        Watcher watcher = null;
+        try {
+          WatchOption option = WatchOption.newBuilder().withRange(keyString).build();
+          watcher = etcdClient.getWatchClient().watch(keyString, option,
+              new PropertyChangedConsumer(repository, latch));
+          latch.await();
+        } catch (InterruptedException ie) {
+          logger.warn("An Interruption: ", ie);
+          Thread.currentThread().interrupt();
+        } catch (Exception e) {
+          String errorMessage =
+              String.format("An exception occurred while watching ETCD @: %s, detail is: %s",
+                  String.join(",", etcdUrls), ExceptionUtils.getStackTrace(e));
+          logger.error(errorMessage);
+        } finally {
+          if (watcher != null) {
+            watcher.close();
+          }
+        }
+      });
+    } finally {
+      isListening = true;
+      es.shutdown();
+    }
+    System.out.println("Umut2");
   }
 
-  private void runCallBackForWatchEvent(CountDownLatch latch, WatchResponse response) {
+  private class PropertyChangedConsumer implements Consumer<WatchResponse> {
+
+    private EtcdEnvironmentRepository repository;
+    private CountDownLatch latch;
+
+    public PropertyChangedConsumer(EtcdEnvironmentRepository repository, CountDownLatch latch) {
+      this.repository = repository;
+      this.latch = latch;
+    }
+
+    @Override
+    public void accept(WatchResponse response) {
+      runCallBackForWatchEvent(latch, response, repository);
+
+    }
+
+  }
+
+  private void runCallBackForWatchEvent(CountDownLatch latch, WatchResponse response,
+      EtcdEnvironmentRepository repository) {
 
     logger.info("******************* CALLBACK CALLED: *************************************");
     logger.info("");
@@ -184,10 +224,17 @@ public class EtcdConnector {
       logger.info("Value: {}", event.getKeyValue().getValue());
       logger.info("Latch values: {}", latch.getCount());
 
-      // key => Optional.ofNullable(event.getKeyValue().getKey()).map(bs ->
-      // bs.toString(StandardCharsets.UTF_8)).orElse("")
-      // value => Optional.ofNullable(event.getKeyValue().getValue()).map(bs ->
-      // bs.toString(StandardCharsets.UTF_8)) .orElse(""));
+      // if not delete event, call the monitor to trigger event to bus
+      if (EventType.DELETE.equals(event.getEventType())
+          || EventType.UNRECOGNIZED.equals(event.getEventType())) {
+        logger.error(
+            "Unexpected Operation When Spring Cloud Config Server is RUNNING: Operation Type: "
+                + event.getEventType() + ", Key: " + event.getKeyValue().getKey());
+        throw new EtcdException(
+            "Restart might be needed for the client Microservices, since a delete or an unrecognized property operation is done on the ETCD cluster");
+      } else if (EventType.PUT.equals(event.getEventType())) {
+        repository.publishEventByPath("sample");
+      }
     }
     latch.countDown();
   }
