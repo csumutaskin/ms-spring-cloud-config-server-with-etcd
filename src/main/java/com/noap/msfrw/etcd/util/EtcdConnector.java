@@ -231,8 +231,8 @@ public class EtcdConnector {
       if (EventType.DELETE.equals(event.getEventType())
           || EventType.UNRECOGNIZED.equals(event.getEventType())) {
         logger.error(
-            "Unexpected Operation When Spring Cloud Config Server is RUNNING: Operation Type: "
-                + event.getEventType() + ", Key: " + event.getKeyValue().getKey());
+            "Unexpected Operation When Spring Cloud Config Server is RUNNING: Operation Type: {}, Key: {}",
+            event.getEventType(), event.getKeyValue().getKey());
         throw new EtcdException(
             "Restart might be needed for the client Microservices, since a delete or an unrecognized property operation is done on the ETCD cluster");
       } else if (EventType.PUT.equals(event.getEventType())) {
