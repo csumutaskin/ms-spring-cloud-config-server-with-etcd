@@ -46,12 +46,12 @@ public class EtcdWatchLock {
 
   public void processWithLock(String keyName, InsideLockRunnable insideLockRunnable) {
     if (Boolean.TRUE.equals(redisProperties.getDistributedlockEnabled())) {
-      logger.info("Redis distributed lock is requested for the key: " + keyName);
+      logger.info("Redis distributed lock is requested for the key: {}", keyName);
       RLock lock = redisson.getLock(keyName);
       try {
         if (lock.tryLock(redisProperties.getLockWaitTime(), redisProperties.getLockLeaseTime(),
             TimeUnit.SECONDS)) {
-          logger.info("Redis distributed lock retrieved for the key: " + keyName);
+          logger.info("Redis distributed lock retrieved for the key: {}", keyName);
           insideLockRunnable.runInsideLock();
         }
       } catch (InterruptedException e) {
