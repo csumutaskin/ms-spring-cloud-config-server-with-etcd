@@ -1,15 +1,11 @@
 spring:
-  security:
-    user:
-      name: umut
-      password: umut
+  rabbitmq:
+    host: 192.168.1.100
+    port: 5672
+    username: guest
+    password: guest
   profiles:
-    active: native,dev,test
-  cloud:
-    config:
-      server:
-        native:
-          searchLocations: file:///C:/Dev/git/framework/sample-local-git-repo/
+    active: native
 management:
   security:
     enabled: false          
