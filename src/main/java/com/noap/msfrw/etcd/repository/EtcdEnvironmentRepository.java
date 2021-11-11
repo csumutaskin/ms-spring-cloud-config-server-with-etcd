@@ -2,10 +2,11 @@ package com.noap.msfrw.etcd.repository;
 
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.bus.event.RefreshRemoteApplicationEvent;
 import org.springframework.cloud.config.environment.Environment;
 import org.springframework.cloud.config.environment.PropertySource;
@@ -13,28 +14,30 @@ import org.springframework.cloud.config.server.environment.EnvironmentRepository
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.util.StringUtils;
+
 import com.noap.msfrw.etcd.util.EtcdConnector;
 
 /***
- * A custom EnvironmentRepository for ETCD Cluster as data resource.**
+ * A custom EnvironmentRepository for that uses an ETCD Cluster as the data resource.
  * 
  * @author Umut
  **/
-// @Component
 public class EtcdEnvironmentRepository
     implements EnvironmentRepository, ApplicationEventPublisherAware {
 
-  private static Log log = LogFactory.getLog(EtcdEnvironmentRepository.class);
-
+  private static Log log = LogFactory.getLog(EtcdEnvironmentRepository.class);  
   private String busId;
   private ApplicationEventPublisher applicationEventPublisher;
   private EtcdConnector connector;
 
-  public EtcdEnvironmentRepository(@Value("${spring.cloud.bus.id:application}") String busId) {
-    this.busId = busId;
-
-    connector = new EtcdConnector("http://192.168.1.100:2379", "http://192.168.1.100:2381",
-        "http://192.168.1.100:2383");
+  public EtcdEnvironmentRepository(List<String> etcdURLs, String busId) {
+	
+	//if(ArrayUtils.isEmpty(etcdURLs)) {
+	//	throw new EtcdException("Application properties should contain 'etcd.urls' parameter (as array) to connect to an ETCD cluster");
+	//}
+	  
+    this.busId = busId;    
+    connector = new EtcdConnector(etcdURLs.stream().toArray(String[]::new));
     connector.connect(null, null, null, null);
     log.info("Starting listening to the etcd cluster...");
     connector.startListening(this);

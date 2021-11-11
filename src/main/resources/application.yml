@@ -8,4 +8,9 @@ spring:
     active: native
 management:
   security:
-    enabled: false          
+    enabled: false
+etcd:
+  urls:
+    - "http://192.168.1.100:2379"
+    - "http://192.168.1.100:2381"
+    - "http://192.168.1.100:2383"
