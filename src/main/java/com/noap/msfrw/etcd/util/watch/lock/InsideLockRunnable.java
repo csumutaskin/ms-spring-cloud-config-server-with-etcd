@@ -1,4 +1,4 @@
-package com.noap.msfrw.etcd.util;
+package com.noap.msfrw.etcd.util.watch.lock;
 
 /**
  * A runnable like functional interface that runs a method with no input arguments.

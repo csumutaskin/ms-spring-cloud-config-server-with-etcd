@@ -1,5 +1,6 @@
 package com.noap.msfrw.etcd.util.watch.lock;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.redisson.Redisson;
 import org.redisson.api.RLock;
@@ -7,38 +8,60 @@ import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.noap.msfrw.etcd.util.InsideLockRunnable;
+import com.noap.msfrw.redis.util.RedisConfigurationProperties;
+import com.noap.msfrw.redis.util.RedisException;
 
-// TODO: lock icin keyname + final value dan bir deger olustur
-// Lock wait time ve release time parametrik olsun
-// Watch lock parametrik olarak disable edilebilmeli butun clusterlar refresh eder bu durumda
-// loglari duzelt
-// endpoint koy locku tutan cluster icin lock hala uzerinde release eden...
-// monitoring icin de rabbitmq dan redise gec.. boylece 3rd party dep. azalir.
+// TODO: loglari duzelt
+// TODO: endpoint koy locku tutan cluster icin lock hala uzerinde release eden
 public class EtcdWatchLock {
 
   Logger logger = LoggerFactory.getLogger(EtcdWatchLock.class);
 
-  public RedissonClient connect() {
-    Config config = new Config();
-    // config.useClusterServers().addNodeAddress("redis://192.168.1.100:6379");
-    config.useSingleServer().setAddress("redis://192.168.1.100:6379");
-    RedissonClient redisson = Redisson.create(config);
+  private Config config;
+  private RedissonClient redisson;
+  private RedisConfigurationProperties redisProperties;
+
+  public RedissonClient getRedisson() {
     return redisson;
   }
 
-  public void processWithLock(RedissonClient redisson, String keyName,
-      InsideLockRunnable insideLockRunnable) {
-    logger.info("8080 Trying lock for key: " + keyName);
-    RLock lock = redisson.getLock(keyName); // TODO: "keyName + final value" ile kur lock u
-    try {
-      if (lock.tryLock(2, 5, TimeUnit.SECONDS)) {
-        logger.info("8080 Lock retrieved for key: " + keyName);
-        insideLockRunnable.runInsideLock();
-      }
-    } catch (InterruptedException e) {
-      e.printStackTrace();
+  public void setRedisson(RedissonClient redisson) {
+    this.redisson = redisson;
+  }
+
+  public EtcdWatchLock(RedisConfigurationProperties redisProperties) {
+    this.redisProperties = redisProperties;
+    List<String> urls = redisProperties.getUrlsWithRedisPrefix();
+    config = new Config();
+    if (urls.size() > 1) {
+      config.useClusterServers().addNodeAddress(urls.toArray(String[]::new));
+    } else if (urls.size() == 1) {
+      config.useSingleServer().setAddress(urls.get(0));
+    } else {
+      throw new RedisException(
+          "At least one connection url should exist as redis.url property in properties/yml file");
     }
-    logger.info("8080 Process finished");
+    redisson = Redisson.create(config);
+  }
+
+  public void processWithLock(String keyName, InsideLockRunnable insideLockRunnable) {
+    if (Boolean.TRUE.equals(redisProperties.getDistributedlockEnabled())) {
+      logger.info("Redis distributed lock is requested for the key: " + keyName);
+      RLock lock = redisson.getLock(keyName);
+      try {
+        if (lock.tryLock(redisProperties.getLockWaitTime(), redisProperties.getLockLeaseTime(),
+            TimeUnit.SECONDS)) {
+          logger.info("Redis distributed lock retrieved for the key: " + keyName);
+          insideLockRunnable.runInsideLock();
+        }
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+      logger.info("Redis distributed lock contolled method execution ended");
+    } else {
+      logger.info(
+          "Redis distributed lock is disabled for current node in the cluster, so this server will run the callback method in all circumstances");
+      insideLockRunnable.runInsideLock();
+    }
   }
 }

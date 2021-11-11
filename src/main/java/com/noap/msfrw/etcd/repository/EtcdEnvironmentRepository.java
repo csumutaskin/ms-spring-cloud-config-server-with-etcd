@@ -2,9 +2,7 @@ package com.noap.msfrw.etcd.repository;
 
 import java.util.Collections;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.bus.event.RefreshRemoteApplicationEvent;
@@ -14,10 +12,9 @@ import org.springframework.cloud.config.server.environment.EnvironmentRepository
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.util.StringUtils;
-
 import com.noap.msfrw.etcd.util.EtcdConnector;
 
-/***
+/**
  * A custom EnvironmentRepository for that uses an ETCD Cluster as the data resource.
  * 
  * @author Umut
@@ -25,19 +22,14 @@ import com.noap.msfrw.etcd.util.EtcdConnector;
 public class EtcdEnvironmentRepository
     implements EnvironmentRepository, ApplicationEventPublisherAware {
 
-  private static Log log = LogFactory.getLog(EtcdEnvironmentRepository.class);  
+  private static Log log = LogFactory.getLog(EtcdEnvironmentRepository.class);
   private String busId;
   private ApplicationEventPublisher applicationEventPublisher;
   private EtcdConnector connector;
 
-  public EtcdEnvironmentRepository(List<String> etcdURLs, String busId) {
-	
-	//if(ArrayUtils.isEmpty(etcdURLs)) {
-	//	throw new EtcdException("Application properties should contain 'etcd.urls' parameter (as array) to connect to an ETCD cluster");
-	//}
-	  
-    this.busId = busId;    
-    connector = new EtcdConnector(etcdURLs.stream().toArray(String[]::new));
+  public EtcdEnvironmentRepository(EtcdConnector connector, String busId) {
+    this.busId = busId;
+    this.connector = connector;
     connector.connect(null, null, null, null);
     log.info("Starting listening to the etcd cluster...");
     connector.startListening(this);

@@ -11,7 +11,6 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.redisson.api.RedissonClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.noap.msfrw.etcd.repository.EtcdEnvironmentRepository;
@@ -41,13 +40,13 @@ public class EtcdConnector {
   private String[] etcdUrls;
   private Client etcdClient;
   private boolean isListening = false;
-  private EtcdWatchLock watchLock;
-  private RedissonClient redissonClient;
+  private EtcdWatchLock etcdWatchLock;
 
-  public EtcdConnector(String... etcdUrls) {
-    this.etcdUrls = etcdUrls;
-    watchLock = new EtcdWatchLock();
-    redissonClient = watchLock.connect();
+  public EtcdConnector(EtcdWatchLock etcdWatchLock,
+      EtcdConfigurationProperties etcdConfigurationProperties) {
+
+    this.etcdUrls = etcdConfigurationProperties.getUrlsWithHttpPrefix().toArray(String[]::new);
+    this.etcdWatchLock = etcdWatchLock;
   }
 
   /**
@@ -237,7 +236,9 @@ public class EtcdConnector {
         throw new EtcdException(
             "Restart might be needed for the client Microservices, since a delete or an unrecognized property operation is done on the ETCD cluster");
       } else if (EventType.PUT.equals(event.getEventType())) {
-        watchLock.processWithLock(redissonClient, event.getKeyValue().getKey().toString(), () -> {
+        String lockString = event.getKeyValue().getKey().toString() + ":"
+            + event.getKeyValue().getValue().toString();
+        etcdWatchLock.processWithLock(lockString, () -> {
           repository.publishEventByPath("sample");
         });
       }

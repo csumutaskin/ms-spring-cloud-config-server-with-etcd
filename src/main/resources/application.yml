@@ -10,7 +10,14 @@ management:
   security:
     enabled: false
 etcd:
+  httpsEnabled: false
   urls:
-    - "http://192.168.1.100:2379"
-    - "http://192.168.1.100:2381"
-    - "http://192.168.1.100:2383"
+    - "192.168.1.100:2379"
+    - "192.168.1.100:2381"
+    - "192.168.1.100:2383"
+redis:
+  distributedlockEnabled: true
+  lockWaitTime: 2
+  lockLeaseTime: 5
+  urls: 
+    - "192.168.1.100:6379"
