@@ -8,4 +8,16 @@ spring:
     active: native
 management:
   security:
-    enabled: false          
+    enabled: false
+etcd:
+  httpsEnabled: false
+  urls:
+    - "192.168.1.100:2379"
+    - "192.168.1.100:2381"
+    - "192.168.1.100:2383"
+redis:
+  distributedlockEnabled: true
+  lockWaitTime: 2
+  lockLeaseTime: 5
+  urls: 
+    - "192.168.1.100:6379"

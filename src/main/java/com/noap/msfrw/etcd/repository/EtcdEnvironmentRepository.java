@@ -5,7 +5,6 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.bus.event.RefreshRemoteApplicationEvent;
 import org.springframework.cloud.config.environment.Environment;
 import org.springframework.cloud.config.environment.PropertySource;
@@ -15,26 +14,22 @@ import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.util.StringUtils;
 import com.noap.msfrw.etcd.util.EtcdConnector;
 
-/***
- * A custom EnvironmentRepository for ETCD Cluster as data resource.**
+/**
+ * A custom EnvironmentRepository for that uses an ETCD Cluster as the data resource.
  * 
  * @author Umut
  **/
-// @Component
 public class EtcdEnvironmentRepository
     implements EnvironmentRepository, ApplicationEventPublisherAware {
 
   private static Log log = LogFactory.getLog(EtcdEnvironmentRepository.class);
-
   private String busId;
   private ApplicationEventPublisher applicationEventPublisher;
   private EtcdConnector connector;
 
-  public EtcdEnvironmentRepository(@Value("${spring.cloud.bus.id:application}") String busId) {
+  public EtcdEnvironmentRepository(EtcdConnector connector, String busId) {
     this.busId = busId;
-
-    connector = new EtcdConnector("http://192.168.1.100:2379", "http://192.168.1.100:2381",
-        "http://192.168.1.100:2383");
+    this.connector = connector;
     connector.connect(null, null, null, null);
     log.info("Starting listening to the etcd cluster...");
     connector.startListening(this);
