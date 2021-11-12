@@ -9,12 +9,16 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.lang.Nullable;
+
 import com.noap.msfrw.etcd.repository.EtcdEnvironmentRepository;
 import com.noap.msfrw.etcd.util.watch.lock.EtcdWatchLock;
+
 import io.etcd.jetcd.ByteSequence;
 import io.etcd.jetcd.Client;
 import io.etcd.jetcd.ClientBuilder;
@@ -41,12 +45,14 @@ public class EtcdConnector {
   private Client etcdClient;
   private boolean isListening = false;
   private EtcdWatchLock etcdWatchLock;
+  private Boolean watchLockEnabled;
 
-  public EtcdConnector(EtcdWatchLock etcdWatchLock,
-      EtcdConfigurationProperties etcdConfigurationProperties) {
+  public EtcdConnector(@Nullable EtcdWatchLock etcdWatchLock,
+      EtcdConfigurationProperties etcdConfigurationProperties, Boolean watchLockEnabled) {
 
     this.etcdUrls = etcdConfigurationProperties.getUrlsWithHttpPrefix().toArray(String[]::new);
     this.etcdWatchLock = etcdWatchLock;
+    this.watchLockEnabled = watchLockEnabled;
   }
 
   /**
@@ -238,9 +244,14 @@ public class EtcdConnector {
       } else if (EventType.PUT.equals(event.getEventType())) {
         String lockString = event.getKeyValue().getKey().toString() + ":"
             + event.getKeyValue().getValue().toString();
-        etcdWatchLock.processWithLock(lockString, () -> {
-          repository.publishEventByPath("sample");
-        });
+        if(!Boolean.TRUE.equals(watchLockEnabled)) {
+        	repository.publishEventByPath("sample");	
+        }
+        else {//distributed lock enabled
+        	etcdWatchLock.processWithLock(lockString, () -> {
+                repository.publishEventByPath("sample");
+              });	
+        }        
       }
     }
     latch.countDown();
