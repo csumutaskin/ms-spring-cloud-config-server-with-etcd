@@ -3,8 +3,9 @@ package com.noap.msfrw.etcd.repository;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.bus.event.RefreshRemoteApplicationEvent;
 import org.springframework.cloud.config.environment.Environment;
 import org.springframework.cloud.config.environment.PropertySource;
@@ -12,6 +13,7 @@ import org.springframework.cloud.config.server.environment.EnvironmentRepository
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.util.StringUtils;
+
 import com.noap.msfrw.etcd.util.EtcdConnector;
 
 /**
@@ -21,8 +23,8 @@ import com.noap.msfrw.etcd.util.EtcdConnector;
  **/
 public class EtcdEnvironmentRepository
     implements EnvironmentRepository, ApplicationEventPublisherAware {
-
-  private static Log log = LogFactory.getLog(EtcdEnvironmentRepository.class);
+  
+  private static final Logger logger = LoggerFactory.getLogger(EtcdEnvironmentRepository.class);
   private String busId;
   private ApplicationEventPublisher applicationEventPublisher;
   private EtcdConnector connector;
@@ -31,7 +33,7 @@ public class EtcdEnvironmentRepository
     this.busId = busId;
     this.connector = connector;
     connector.connect(null, null, null, null);
-    log.info("Starting listening to the etcd cluster...");
+    logger.info("Starting listening to the etcd cluster...");
     connector.startListening(this);
   }
 
@@ -59,7 +61,7 @@ public class EtcdEnvironmentRepository
       }
       if (this.applicationEventPublisher != null) {
         for (String service : services) {
-          log.info("Refresh for: " + service);
+          logger.info("Refresh for: {}", service);
           this.applicationEventPublisher
               .publishEvent(new RefreshRemoteApplicationEvent(this, this.busId, service));
         }
