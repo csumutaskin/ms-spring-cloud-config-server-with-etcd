@@ -46,7 +46,7 @@ public class EtcdEnvironmentRepository
   public Environment findOne(String application, String profile, String label) {
 
     Environment environment = new Environment(application, profile);
-    environment.add(new PropertySource("mapPropertySource", connector.getAllKeyValues()));
+    environment.add(new PropertySource("mapPropertySource", connector.getAllKeyValues(application, profile, label)));
     return environment;
   }
 

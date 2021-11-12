@@ -90,7 +90,7 @@ public class EtcdConnector {
    *
    * @return map of key value pairs stored.
    */
-  public Map<String, String> getAllKeyValues() {
+  public Map<String, String> getAllKeyValues(String application, String profile, String label) {
 
     checkConnection();
 
