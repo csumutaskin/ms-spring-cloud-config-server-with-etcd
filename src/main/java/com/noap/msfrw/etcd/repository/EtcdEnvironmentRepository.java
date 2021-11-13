@@ -3,9 +3,9 @@ package com.noap.msfrw.etcd.repository;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cloud.bus.event.PathDestinationFactory;
 import org.springframework.cloud.bus.event.RefreshRemoteApplicationEvent;
 import org.springframework.cloud.config.environment.Environment;
 import org.springframework.cloud.config.environment.PropertySource;
@@ -13,7 +13,6 @@ import org.springframework.cloud.config.server.environment.EnvironmentRepository
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.util.StringUtils;
-
 import com.noap.msfrw.etcd.util.EtcdConnector;
 
 /**
@@ -23,7 +22,7 @@ import com.noap.msfrw.etcd.util.EtcdConnector;
  **/
 public class EtcdEnvironmentRepository
     implements EnvironmentRepository, ApplicationEventPublisherAware {
-  
+
   private static final Logger logger = LoggerFactory.getLogger(EtcdEnvironmentRepository.class);
   private String busId;
   private ApplicationEventPublisher applicationEventPublisher;
@@ -46,24 +45,25 @@ public class EtcdEnvironmentRepository
   public Environment findOne(String application, String profile, String label) {
 
     Environment environment = new Environment(application, profile);
-    environment.add(new PropertySource("mapPropertySource", connector.getAllKeyValues()));
+    environment.add(new PropertySource("mapPropertySource",
+        connector.getAllKeyValues(application, profile, label)));
     return environment;
   }
 
-  // for local project: publishEventByPath("sample") // taken from spring cloud monitor
-  @SuppressWarnings("deprecation")
+  // below code taken from spring cloud monitor project...
   public Set<String> publishEventByPath(String... registeredClientAppLicationPaths) {
 
     if (registeredClientAppLicationPaths != null) {
       Set<String> services = new LinkedHashSet<>();
       for (String path : registeredClientAppLicationPaths) {
-        services.addAll(guessServiceName(path));
+        // services.addAll(guessServiceName(path));
+        services.add(path);
       }
       if (this.applicationEventPublisher != null) {
         for (String service : services) {
           logger.info("Refresh for: {}", service);
-          this.applicationEventPublisher
-              .publishEvent(new RefreshRemoteApplicationEvent(this, this.busId, service));
+          this.applicationEventPublisher.publishEvent(new RefreshRemoteApplicationEvent(this,
+              this.busId, new PathDestinationFactory().getDestination(service)));
         }
         return services;
       }

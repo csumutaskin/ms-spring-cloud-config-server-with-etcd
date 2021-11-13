@@ -9,16 +9,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
-
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
-
 import com.noap.msfrw.etcd.repository.EtcdEnvironmentRepository;
 import com.noap.msfrw.etcd.util.watch.lock.EtcdWatchLock;
-
 import io.etcd.jetcd.ByteSequence;
 import io.etcd.jetcd.Client;
 import io.etcd.jetcd.ClientBuilder;
@@ -26,6 +23,7 @@ import io.etcd.jetcd.KeyValue;
 import io.etcd.jetcd.Watch.Watcher;
 import io.etcd.jetcd.kv.GetResponse;
 import io.etcd.jetcd.options.GetOption;
+import io.etcd.jetcd.options.GetOption.Builder;
 import io.etcd.jetcd.options.WatchOption;
 import io.etcd.jetcd.watch.WatchEvent;
 import io.etcd.jetcd.watch.WatchEvent.EventType;
@@ -37,9 +35,10 @@ import io.etcd.jetcd.watch.WatchResponse;
  * @author UMUT
  *
  */
+// TODO: delete key from etcd check!
 public class EtcdConnector {
 
-  Logger logger = LoggerFactory.getLogger(EtcdConnector.class);
+  private static final Logger logger = LoggerFactory.getLogger(EtcdConnector.class);
 
   private String[] etcdUrls;
   private Client etcdClient;
@@ -90,20 +89,32 @@ public class EtcdConnector {
    *
    * @return map of key value pairs stored.
    */
-  public Map<String, String> getAllKeyValues() {
+  public Map<String, String> getAllKeyValues(String application, String profile, String label) {
 
     checkConnection();
 
     Map<String, String> keyValueMap = new ConcurrentHashMap<>();
-    ByteSequence keyAsStartStr = ByteSequence.from("\0".getBytes());
-    GetOption option = GetOption.newBuilder().withSortField(GetOption.SortTarget.KEY)
-        .withSortOrder(GetOption.SortOrder.DESCEND).withRange(keyAsStartStr).build();
-    CompletableFuture<GetResponse> futureResponse =
-        etcdClient.getKVClient().get(keyAsStartStr, option);
+    String searchKeyPrefix =
+        createSearchPrefixFromApplicationParameters(application, profile, label);
+    String replaceablePrefix = searchKeyPrefix;
+    CompletableFuture<GetResponse> futureSearchResponse;
+    Builder etcdGetBuilder = GetOption.newBuilder().withSortField(GetOption.SortTarget.KEY)
+        .withSortOrder(GetOption.SortOrder.DESCEND);
+
+    if (StringUtils.isNoneBlank(searchKeyPrefix)) {
+      GetOption option = etcdGetBuilder.isPrefix(true).build();
+      futureSearchResponse =
+          etcdClient.getKVClient().get(ByteSequence.from(searchKeyPrefix.getBytes()), option);
+    } else {
+      searchKeyPrefix = "\0";
+      ByteSequence searchKeyPrefixAsBytes = ByteSequence.from(searchKeyPrefix.getBytes());
+      GetOption option = etcdGetBuilder.withRange(searchKeyPrefixAsBytes).build();
+      futureSearchResponse = etcdClient.getKVClient().get(searchKeyPrefixAsBytes, option);
+    }
 
     GetResponse response = null;
     try {
-      response = futureResponse.get();
+      response = futureSearchResponse.get();
     } catch (InterruptedException ie) {
       logger.warn("An Interruption : ", ie);
       Thread.currentThread().interrupt();
@@ -116,16 +127,28 @@ public class EtcdConnector {
 
     if (response == null || response.getKvs().isEmpty()) {
       if (logger.isInfoEnabled()) {
-        logger.info(String.format("Etcd cluster at: %s contains no key value data yet...",
-            String.join(",", etcdUrls)));
+        logger.info(
+            "Etcd cluster at: {} contains no key (starting with: '{}') and value data yet...",
+            String.join(",", etcdUrls), searchKeyPrefix);
       }
       return keyValueMap;
     }
 
     for (KeyValue kv : response.getKvs()) {
-      keyValueMap.put(kv.getKey().toString(), kv.getValue().toString());
+      // replace key with previously calculated prefix
+      String keyToAdd = kv.getKey().toString().replaceFirst(replaceablePrefix, "");
+      keyValueMap.put(keyToAdd, kv.getValue().toString());
     }
     return keyValueMap;
+  }
+
+  private String createSearchPrefixFromApplicationParameters(String application, String profile,
+      String label) {
+    return new StringBuilder("")
+        .append(StringUtils.isNotBlank(application) ? (application + ".") : "")
+        .append(StringUtils.isNotBlank(profile) ? (profile + ".") : "")
+        .append(StringUtils.isNotBlank(label) ? (label + ".") : "").toString();
+
   }
 
   /**
@@ -216,9 +239,7 @@ public class EtcdConnector {
     @Override
     public void accept(WatchResponse response) {
       runCallBackForWatchEvent(latch, response, repository);
-
     }
-
   }
 
   private void runCallBackForWatchEvent(CountDownLatch latch, WatchResponse response,
@@ -242,19 +263,30 @@ public class EtcdConnector {
         throw new EtcdException(
             "Restart might be needed for the client Microservices, since a delete or an unrecognized property operation is done on the ETCD cluster");
       } else if (EventType.PUT.equals(event.getEventType())) {
-        String lockString = event.getKeyValue().getKey().toString() + ":"
-            + event.getKeyValue().getValue().toString();
-        if(!Boolean.TRUE.equals(watchLockEnabled)) {
-        	repository.publishEventByPath("sample");	
+
+
+        String keyModified = event.getKeyValue().getKey().toString();
+        String applicationName = extractApplicationName(keyModified);
+        // TODO: Wildcard check ....
+        String lockString = keyModified + ":" + event.getKeyValue().getValue().toString();
+        if (!Boolean.TRUE.equals(watchLockEnabled)) {
+          repository.publishEventByPath(applicationName);
+        } else {// distributed lock enabled
+          etcdWatchLock.processWithLock(lockString, () -> {
+            repository.publishEventByPath(applicationName);
+          });
         }
-        else {//distributed lock enabled
-        	etcdWatchLock.processWithLock(lockString, () -> {
-                repository.publishEventByPath("sample");
-              });	
-        }        
       }
     }
     latch.countDown();
+  }
+
+  private String extractApplicationName(String modifiedKey) {
+    String[] tokens = modifiedKey.split("\\.");
+    if (tokens.length > 1) {// first token is the application
+      return tokens[0];
+    }
+    return "*";
   }
 
   private void checkConnection() {
