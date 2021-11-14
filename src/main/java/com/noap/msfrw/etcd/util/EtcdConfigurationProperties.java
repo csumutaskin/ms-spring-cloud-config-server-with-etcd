@@ -13,6 +13,7 @@ public class EtcdConfigurationProperties {
   private static final String HTTP_PREFIX = "http://";
   private static final String HTTPS_PREFIX = "https://";
   private List<String> urls = new ArrayList<>();
+  private List<KeyPrefix> keyPrefixOrder = new ArrayList<>();
   private Boolean httpsEnabled = false;
 
   public List<String> getUrls() {
@@ -40,5 +41,13 @@ public class EtcdConfigurationProperties {
 
   public void setHttpsEnabled(Boolean httpsEnabled) {
     this.httpsEnabled = httpsEnabled;
+  }
+
+  public List<KeyPrefix> getKeyPrefixOrder() {
+    return keyPrefixOrder;
+  }
+
+  public void setKeyPrefixOrder(List<KeyPrefix> keyPrefixOrder) {
+    this.keyPrefixOrder = keyPrefixOrder;
   }
 }

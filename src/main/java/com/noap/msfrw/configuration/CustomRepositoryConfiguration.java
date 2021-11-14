@@ -8,7 +8,6 @@ import org.springframework.cloud.bus.BusProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.Nullable;
-
 import com.noap.msfrw.etcd.repository.EtcdEnvironmentRepository;
 import com.noap.msfrw.etcd.util.EtcdConfigurationProperties;
 import com.noap.msfrw.etcd.util.EtcdConnector;
@@ -16,9 +15,12 @@ import com.noap.msfrw.etcd.util.watch.lock.EtcdWatchLock;
 import com.noap.msfrw.redis.util.RedisConfigurationProperties;
 
 /**
- * Configuration class that initializes {@link EtcdEnvironmentRepository} bean. Main purpose of this configuration class is to initialize the main beans using the their related properties taken from the .yaml file.
- * The idea of the code for initializing the {@link EtcdEnvironmentRepository} bean is taken directly from the "official spring cloud server monitor" project, so that its initialization method varies related with the existence
- * of BusProperties bean.   
+ * Configuration class that initializes {@link EtcdEnvironmentRepository} bean. Main purpose of this
+ * configuration class is to initialize the main beans using the their related properties taken from
+ * the .yaml file. The idea of the code for initializing the {@link EtcdEnvironmentRepository} bean
+ * is taken directly from the "official spring cloud server monitor" project, so that its
+ * initialization method varies related with the existence of BusProperties bean.
+ * 
  * @author UMUT
  *
  */
@@ -50,7 +52,8 @@ public class CustomRepositoryConfiguration {
 
   @Bean
   public EtcdConnector etcdConnector(@Nullable EtcdWatchLock etcdWatchLock) {
-    return new EtcdConnector(etcdWatchLock, etcdProperties, redisProperties.getDistributedlockEnabled());
+    return new EtcdConnector(etcdWatchLock, etcdProperties,
+        redisProperties.getDistributedLockEnabled());
   }
 
   @Bean

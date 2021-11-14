@@ -1,6 +1,7 @@
 package com.noap.msfrw.etcd.util;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,6 +15,7 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
+import org.springframework.util.CollectionUtils;
 import com.noap.msfrw.etcd.repository.EtcdEnvironmentRepository;
 import com.noap.msfrw.etcd.util.watch.lock.EtcdWatchLock;
 import io.etcd.jetcd.ByteSequence;
@@ -45,11 +47,13 @@ public class EtcdConnector {
   private boolean isListening = false;
   private EtcdWatchLock etcdWatchLock;
   private Boolean watchLockEnabled;
+  private EtcdConfigurationProperties etcdConfigurationProperties;
 
   public EtcdConnector(@Nullable EtcdWatchLock etcdWatchLock,
       EtcdConfigurationProperties etcdConfigurationProperties, Boolean watchLockEnabled) {
 
     this.etcdUrls = etcdConfigurationProperties.getUrlsWithHttpPrefix().toArray(String[]::new);
+    this.etcdConfigurationProperties = etcdConfigurationProperties;
     this.etcdWatchLock = etcdWatchLock;
     this.watchLockEnabled = watchLockEnabled;
   }
@@ -142,15 +146,6 @@ public class EtcdConnector {
     return keyValueMap;
   }
 
-  private String createSearchPrefixFromApplicationParameters(String application, String profile,
-      String label) {
-    return new StringBuilder("")
-        .append(StringUtils.isNotBlank(application) ? (application + ".") : "")
-        .append(StringUtils.isNotBlank(profile) ? (profile + ".") : "")
-        .append(StringUtils.isNotBlank(label) ? (label + ".") : "").toString();
-
-  }
-
   /**
    * Returns desired key and value stored in the ETCD cluster connected, null if no key is found.
    *
@@ -203,8 +198,9 @@ public class EtcdConnector {
         Watcher watcher = null;
         try {
           WatchOption option = WatchOption.newBuilder().withRange(keyString).build();
-          watcher = etcdClient.getWatchClient().watch(keyString, option,
-              new PropertyChangedConsumer(repository, latch));
+          watcher =
+              etcdClient.getWatchClient().watch(keyString, option, new PropertyChangedConsumer(
+                  repository, latch, etcdConfigurationProperties.getKeyPrefixOrder()));
           latch.await();
         } catch (InterruptedException ie) {
           logger.warn("An Interruption: ", ie);
@@ -230,43 +226,40 @@ public class EtcdConnector {
 
     private EtcdEnvironmentRepository repository;
     private CountDownLatch latch;
+    private List<KeyPrefix> keyPrefixOrder;
 
-    public PropertyChangedConsumer(EtcdEnvironmentRepository repository, CountDownLatch latch) {
+    public PropertyChangedConsumer(EtcdEnvironmentRepository repository, CountDownLatch latch,
+        List<KeyPrefix> keyPrefixOrder) {
+      this.keyPrefixOrder = keyPrefixOrder;
       this.repository = repository;
       this.latch = latch;
     }
 
     @Override
     public void accept(WatchResponse response) {
-      runCallBackForWatchEvent(latch, response, repository);
+      runCallBackForWatchEvent(keyPrefixOrder, latch, response, repository);
     }
   }
 
-  private void runCallBackForWatchEvent(CountDownLatch latch, WatchResponse response,
-      EtcdEnvironmentRepository repository) {
+  private void runCallBackForWatchEvent(List<KeyPrefix> keyPrefixOrder, CountDownLatch latch,
+      WatchResponse response, EtcdEnvironmentRepository repository) {
 
     logger.info("******************* CALLBACK CALLED: *************************************");
-    logger.info("");
     for (WatchEvent event : response.getEvents()) {
-      logger.info("----------------------------------");
       logger.info("Event type: {}", event.getEventType());
       logger.info("Watching for key: {}", event.getKeyValue().getKey());
-      logger.info("Value: {}", event.getKeyValue().getValue());
-      logger.info("Latch values: {}", latch.getCount());
+      logger.info("Value altered: {}", event.getKeyValue().getValue());
+      logger.info("Current latch value: {}", latch.getCount());
 
       // if not delete event, call the monitor to trigger event to bus
       if (EventType.DELETE.equals(event.getEventType())
           || EventType.UNRECOGNIZED.equals(event.getEventType())) {
         logger.error(
-            "Unexpected Operation When Spring Cloud Config Server is RUNNING: Operation Type: {}, Key: {}",
+            "Unexpected (or Deletion) Operation When Spring Cloud Config Server is RUNNING: Operation Type: {}, Key: {}. Restart might be needed for the client Microservices, since a delete or an unrecognized property operation is done on the ETCD cluster",
             event.getEventType(), event.getKeyValue().getKey());
-        throw new EtcdException(
-            "Restart might be needed for the client Microservices, since a delete or an unrecognized property operation is done on the ETCD cluster");
       } else if (EventType.PUT.equals(event.getEventType())) {
-
-
         String keyModified = event.getKeyValue().getKey().toString();
-        String applicationName = extractApplicationName(keyModified);
+        String applicationName = extractApplicationName(keyModified, keyPrefixOrder);
         String lockString = keyModified + ":" + event.getKeyValue().getValue().toString();
         if (!Boolean.TRUE.equals(watchLockEnabled)) {
           repository.publishEventByPath(applicationName);
@@ -280,10 +273,15 @@ public class EtcdConnector {
     latch.countDown();
   }
 
-  private String extractApplicationName(String modifiedKey) {
+  private String extractApplicationName(String modifiedKey, List<KeyPrefix> keyPrefixOrder) {
+
+    int applicationIndexInKeyPrefix = keyPrefixOrder.indexOf(KeyPrefix.APPLICATION);
+    if (applicationIndexInKeyPrefix == -1) { // No application name should exist in keys
+      return "*";
+    }
     String[] tokens = modifiedKey.split("\\.");
-    if (tokens.length > 1) {// first token is the application
-      return tokens[0];
+    if (tokens.length > applicationIndexInKeyPrefix + 1) { // +1 reserved for actual key itself
+      return tokens[applicationIndexInKeyPrefix];
     }
     return "*";
   }
@@ -292,6 +290,38 @@ public class EtcdConnector {
     if (etcdClient == null) {
       throw new EtcdException(
           "Connection to the ETCD cluster is null, call connect() method first.");
+    }
+  }
+
+  private String createSearchPrefixFromApplicationParameters(String application, String profile,
+      String label) {
+    List<KeyPrefix> keyPrefixOrder = etcdConfigurationProperties.getKeyPrefixOrder();
+    StringBuilder keyPrefixFormation = new StringBuilder("");
+    if (CollectionUtils.isEmpty(keyPrefixOrder)) {
+      return keyPrefixFormation.toString();
+    }
+    for (KeyPrefix currentPrefix : keyPrefixOrder) {
+      appendWithParameter(keyPrefixFormation, currentPrefix, application, profile, label);
+    }
+    return keyPrefixFormation.toString();
+
+  }
+
+  private void appendWithParameter(StringBuilder origin, KeyPrefix currentPrefix,
+      String application, String profile, String label) {
+    switch (currentPrefix) {
+      case APPLICATION:
+        origin.append(StringUtils.isNotBlank(application) ? (application + ".") : "");
+        break;
+      case LABEL:
+        origin.append(StringUtils.isNotBlank(label) ? (label + ".") : "");
+        break;
+      case PROFILE:
+        origin.append(StringUtils.isNotBlank(profile) ? (profile + ".") : "");
+        break;
+      default:
+        throw new EtcdException(
+            "Key Prefix Order retrieved from application.yaml contains wrong key, only application, label and profile words are allowed.");
     }
   }
 }
