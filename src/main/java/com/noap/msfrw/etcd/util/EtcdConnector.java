@@ -267,7 +267,6 @@ public class EtcdConnector {
 
         String keyModified = event.getKeyValue().getKey().toString();
         String applicationName = extractApplicationName(keyModified);
-        // TODO: Wildcard check ....
         String lockString = keyModified + ":" + event.getKeyValue().getValue().toString();
         if (!Boolean.TRUE.equals(watchLockEnabled)) {
           repository.publishEventByPath(applicationName);
