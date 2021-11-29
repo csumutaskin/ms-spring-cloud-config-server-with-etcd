@@ -39,6 +39,10 @@ public class EtcdEnvironmentRepository
   public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
     this.applicationEventPublisher = applicationEventPublisher;
   }
+  
+  public ApplicationEventPublisher getApplicationEventPublisher() {
+	  return applicationEventPublisher;
+  }
 
   @Override
   public Environment findOne(String application, String profile, String label) {
