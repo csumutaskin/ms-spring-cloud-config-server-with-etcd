@@ -48,10 +48,17 @@ public class EtcdConnector {
   private EtcdWatchLock etcdWatchLock;
   private Boolean watchLockEnabled;
   private EtcdConfigurationProperties etcdConfigurationProperties;
+ 
+  public Client getEtcdClient() {
+	return etcdClient;
+  }
+
+  public void setEtcdClient(Client etcdClient) {
+	this.etcdClient = etcdClient;
+  }
 
   public EtcdConnector(@Nullable EtcdWatchLock etcdWatchLock,
       EtcdConfigurationProperties etcdConfigurationProperties, Boolean watchLockEnabled) {
-
     this.etcdUrls = etcdConfigurationProperties.getUrlsWithHttpPrefix().toArray(String[]::new);
     this.etcdConfigurationProperties = etcdConfigurationProperties;
     this.etcdWatchLock = etcdWatchLock;
