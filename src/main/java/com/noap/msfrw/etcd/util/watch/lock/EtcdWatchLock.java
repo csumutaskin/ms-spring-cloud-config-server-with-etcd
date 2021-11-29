@@ -17,7 +17,6 @@ public class EtcdWatchLock {
 
   Logger logger = LoggerFactory.getLogger(EtcdWatchLock.class);
 
-  private Config config;
   private RedissonClient redisson;
   private RedisConfigurationProperties redisProperties;
 
@@ -28,22 +27,25 @@ public class EtcdWatchLock {
   public void setRedisson(RedissonClient redisson) {
     this.redisson = redisson;
   }
-
-  public EtcdWatchLock(RedisConfigurationProperties redisProperties) {
-    this.redisProperties = redisProperties;
-    List<String> urls = redisProperties.getUrlsWithRedisPrefix();
-    config = new Config();
-    if (urls.size() > 1) {
-      config.useClusterServers().addNodeAddress(urls.toArray(String[]::new));
-    } else if (urls.size() == 1) {
-      config.useSingleServer().setAddress(urls.get(0));
-    } else {
-      throw new RedisException(
-          "At least one connection url should exist as redis.url property in properties/yml file");
-    }
-    redisson = Redisson.create(config);
+  
+  public EtcdWatchLock(RedisConfigurationProperties redisProperties, Config config) {
+	    this.redisProperties = redisProperties;
+	    List<String> urls = redisProperties.getUrlsWithRedisPrefix();	    
+	    if (urls.size() > 1) {
+	      config.useClusterServers().addNodeAddress(urls.toArray(String[]::new));
+	    } else if (urls.size() == 1) {
+	      config.useSingleServer().setAddress(urls.get(0));
+	    } else {
+	      throw new RedisException(
+	          "At least one connection url should exist as redis.url property in properties/yml file");
+	    }
+	    redisson = Redisson.create(config);
   }
 
+  public EtcdWatchLock(RedisConfigurationProperties redisProperties) {
+	 this(redisProperties, new Config());    
+  }
+  
   public void processWithLock(String keyName, InsideLockRunnable insideLockRunnable) {
     if (Boolean.TRUE.equals(redisProperties.getDistributedLockEnabled())) {
       logger.info("Redis distributed lock is requested for the key: {}", keyName);
