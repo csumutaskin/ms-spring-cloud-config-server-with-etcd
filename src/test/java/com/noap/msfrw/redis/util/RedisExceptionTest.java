@@ -15,7 +15,6 @@ class RedisExceptionTest {
 	@DisplayName("Thrown Exception Message contains a particular String")
 	void whenEtcdExceptionInitialized_thenThrownExceptionHasSameTypeAndMessage_VerboseTest() {
 		String exceptionMessage = "sampleMessage";
-		
 		RedisException ee = new RedisException(exceptionMessage);
 		Exception exception = assertThrows(RedisException.class,	() -> { throw ee; });
 		assertEquals(exception.getMessage(), exceptionMessage);		
@@ -28,5 +27,16 @@ class RedisExceptionTest {
 		RedisException ee = new RedisException(identifiedRunTime);
 		Exception exception = assertThrows(RedisException.class,	() -> { throw ee; });
 		assertEquals(exception.getCause(), identifiedRunTime);		
+	}
+	
+	@Test
+	@DisplayName("Thrown Exception Message Contains the Identified Root Cause And Message")
+	void whenEtcdExceptionInitialized_thenThrownExceptionHasSameRootCauseAndMessage_VerboseTest() {
+		String exceptionMessage = "sampleMessage";
+		Throwable identifiedRunTime = new RuntimeException();		
+		RedisException ee = new RedisException(exceptionMessage, identifiedRunTime);
+		Exception exception = assertThrows(RedisException.class,	() -> { throw ee; });
+		assertEquals(exception.getCause(), identifiedRunTime);		
+		assertEquals(exception.getMessage(), exceptionMessage);	
 	}
 }

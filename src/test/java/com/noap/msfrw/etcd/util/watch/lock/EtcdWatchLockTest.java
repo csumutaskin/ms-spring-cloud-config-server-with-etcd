@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.redisson.Redisson;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.redisson.config.ClusterServersConfig;
 import org.redisson.config.Config;
 import org.redisson.config.SingleServerConfig;
 
@@ -27,15 +28,33 @@ import com.noap.msfrw.redis.util.RedisConfigurationProperties;
 class EtcdWatchLockTest {
 
 	@Test
-	@DisplayName("When Redisson Client Given Set it With Success")
-	void whenRedissonClientGiven_setWithSuccess() {
+	@DisplayName("Given Only One Url, When Redisson Client Given Set up a Single Server Connection")
+	void givenOnlyOneUrl_whenRedissonClientGiven_setWithSuccess() {
 		RedissonClient mockClient = Mockito.mock(RedissonClient.class);
 		RedisConfigurationProperties rcp = Mockito.mock(RedisConfigurationProperties.class);
 		Config config = Mockito.mock(Config.class);
 		SingleServerConfig ssc = Mockito.mock(SingleServerConfig.class);
-		Mockito.when(rcp.getUrlsWithRedisPrefix()).thenReturn(Stream.of("").collect(Collectors.toList()));
+		Mockito.when(rcp.getUrlsWithRedisPrefix()).thenReturn(Stream.of("one_url").collect(Collectors.toList()));
 		Mockito.when(config.useSingleServer()).thenReturn(ssc);
 		Mockito.when(ssc.setAddress(anyString())).then(invocation -> null);
+		try (MockedStatic<Redisson> redissonUtil = Mockito.mockStatic(Redisson.class)) {
+			redissonUtil.when(Redisson::create).then(invocation -> null);
+			EtcdWatchLock ewl = new EtcdWatchLock(rcp, config);
+			ewl.setRedisson(mockClient);
+			assertEquals(ewl.getRedisson(), mockClient);
+	    }		
+	}
+	
+	@Test
+	@DisplayName("Given More Than One Url, When Redisson Client Given Set it With Success")
+	void givenMoreThanOneUrl_whenRedissonClientGiven_setWithSuccess() {
+		RedissonClient mockClient = Mockito.mock(RedissonClient.class);
+		RedisConfigurationProperties rcp = Mockito.mock(RedisConfigurationProperties.class);
+		Config config = Mockito.mock(Config.class);
+		ClusterServersConfig ssc = Mockito.mock(ClusterServersConfig.class);
+		Mockito.when(rcp.getUrlsWithRedisPrefix()).thenReturn(Stream.of("one_url", "another_url").collect(Collectors.toList()));
+		Mockito.when(config.useClusterServers()).thenReturn(ssc);
+		Mockito.when(ssc.addNodeAddress(any())).then(invocation -> null);
 		try (MockedStatic<Redisson> redissonUtil = Mockito.mockStatic(Redisson.class)) {
 			redissonUtil.when(Redisson::create).then(invocation -> null);
 			EtcdWatchLock ewl = new EtcdWatchLock(rcp, config);
@@ -65,6 +84,30 @@ class EtcdWatchLockTest {
 			Mockito.when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
 			ewl.processWithLock("key", runnable);
 			Mockito.verify(runnable).runInsideLock();
+	    }	
+	}
+	
+	@Test
+	@DisplayName("Given Distributed Lock is Enabled When Process With Lock is requested Then Throw Interrupted Exception")
+	void givenDistributedLockEnabled_whenProcessWithLockRequested_thenThrowInterruptedException() throws InterruptedException {
+		InsideLockRunnable runnable = Mockito.mock(InsideLockRunnable.class);
+		RedissonClient mockClient = Mockito.mock(RedissonClient.class);
+		RedisConfigurationProperties rcp = Mockito.mock(RedisConfigurationProperties.class);
+		Config config = Mockito.mock(Config.class);
+		RLock lock = Mockito.mock(RLock.class);
+		SingleServerConfig ssc = Mockito.mock(SingleServerConfig.class);
+		Mockito.when(rcp.getDistributedLockEnabled()).thenReturn(Boolean.TRUE);
+		Mockito.when(rcp.getUrlsWithRedisPrefix()).thenReturn(Stream.of("").collect(Collectors.toList()));
+		Mockito.when(config.useSingleServer()).thenReturn(ssc);
+		Mockito.when(ssc.setAddress(anyString())).then(invocation -> null);
+		try (MockedStatic<Redisson> redissonUtil = Mockito.mockStatic(Redisson.class)) {
+			redissonUtil.when(Redisson::create).then(invocation -> null);
+			EtcdWatchLock ewl = new EtcdWatchLock(rcp, config);
+			ewl.setRedisson(mockClient);
+			Mockito.when(mockClient.getLock(anyString())).thenReturn(lock);			
+			Mockito.when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenThrow(InterruptedException.class);
+			ewl.processWithLock("key", runnable);
+			Mockito.verify(lock).tryLock(anyLong(), anyLong(), any(TimeUnit.class));
 	    }	
 	}
 	
