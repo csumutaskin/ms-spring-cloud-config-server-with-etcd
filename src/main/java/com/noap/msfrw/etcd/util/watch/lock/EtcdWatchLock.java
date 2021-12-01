@@ -11,8 +11,25 @@ import org.slf4j.LoggerFactory;
 import com.noap.msfrw.redis.util.RedisConfigurationProperties;
 import com.noap.msfrw.redis.util.RedisException;
 
-// TODO: loglari duzelt
-// TODO: endpoint koy locku tutan cluster icin lock hala uzerinde release eden
+/**
+ * This utility is a distributed lock utility that uses REDIS behind. 
+ * <p>
+ * The main purpose of this lock is to prevent concurrent refresh events for the same key value change in a
+ * cluster of spring cloud configuration server instances. Anyone willing to remove the bottleneck of configuration server by
+ * creating a set of spring cloud configuration servers in a cluster can enable this distributed lock by using the property
+ * "redis.distributedlockEnabled=true" in application properties. A time-managed distributed lock is auto enabled for other 
+ * instances in the same spring cloud configuration server cluster to prevent the refresh signal for all the clients connected 
+ * to them. After that certain time passes the lock is auto released by this utility (using the redis.lockWaitTime: and 
+ * redis.lockLeaseTime: 5 properties -unit is in seconds-)
+ * </p>
+ * <p>
+ * For single instanced spring cloud configuration servers or if it is not a problem to refresh the clients for 
+ * the number of cloud configuration servers for the same key value update, you do not need to use this utility. 
+ * Disable the utility by setting redis.distributedlockEnabled to false. 
+ * </p>
+ * @author UMUT
+ *
+ */
 public class EtcdWatchLock {
 
   Logger logger = LoggerFactory.getLogger(EtcdWatchLock.class);
@@ -46,6 +63,12 @@ public class EtcdWatchLock {
 	 this(redisProperties, new Config());    
   }
   
+  /**
+   * Wrap a functionality within a distributed lock so that only the first instance retrieving the lock runs that functionality 
+   * in a cluster of servers.
+   * @param keyName name of the distributed lock. By default it is formed by concatenating ETCD key with its value.
+   * @param insideLockRunnable functionality running inside the distributed lock.
+   */
   public void processWithLock(String keyName, InsideLockRunnable insideLockRunnable) {
     if (Boolean.TRUE.equals(redisProperties.getDistributedLockEnabled())) {
       logger.info("Redis distributed lock is requested for the key: {}", keyName);

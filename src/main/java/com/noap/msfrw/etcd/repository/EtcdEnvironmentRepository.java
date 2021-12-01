@@ -15,7 +15,7 @@ import org.springframework.context.ApplicationEventPublisherAware;
 import com.noap.msfrw.etcd.util.EtcdConnector;
 
 /**
- * A custom EnvironmentRepository for that uses an ETCD Cluster as the data resource.
+ * A custom EnvironmentRepository for that uses an ETCD Cluster as the property data resource.
  * 
  * @author Umut
  **/
@@ -35,15 +35,26 @@ public class EtcdEnvironmentRepository
     connector.startListening(this);
   }
 
+  /**
+   * Setter for ApplicationEventPublisher. By injecting this Application Event Publisher, this class gains the
+   * capability of publishing events, idea taken from Spring Cloud Monitor project.
+   */
   @Override
   public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
     this.applicationEventPublisher = applicationEventPublisher;
   }
   
+  /**
+   * Getter for Application Event Publisher. 
+   * @return applicationEventPublisher.
+   */
   public ApplicationEventPublisher getApplicationEventPublisher() {
 	  return applicationEventPublisher;
   }
 
+  /**
+   * Initializes the key values retrieved from ETCD store and make them available through the application.
+   */
   @Override
   public Environment findOne(String application, String profile, String label) {
     Environment environment = new Environment(application, profile);

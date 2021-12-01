@@ -32,12 +32,11 @@ import io.etcd.jetcd.watch.WatchEvent.EventType;
 import io.etcd.jetcd.watch.WatchResponse;
 
 /**
- * Etcd Connector Utility Class.
+ * ETCD Connector Utility Class.
  * 
  * @author UMUT
  *
  */
-// TODO: delete key from etcd check!
 public class EtcdConnector {
 
   private static final Logger logger = LoggerFactory.getLogger(EtcdConnector.class);
@@ -229,6 +228,7 @@ public class EtcdConnector {
     }
   }
 
+  //An inner class that holds a key value change information in itself and has a callback trigger functionality after a change in key value store occurs. 
   private class PropertyChangedConsumer implements Consumer<WatchResponse> {
 
     private EtcdEnvironmentRepository repository;
@@ -248,6 +248,7 @@ public class EtcdConnector {
     }
   }
 
+  //Callback trigger after a property change in ETCD occurs.
   private void runCallBackForWatchEvent(List<KeyPrefix> keyPrefixOrder, CountDownLatch latch,
       WatchResponse response, EtcdEnvironmentRepository repository) {
 
@@ -280,6 +281,7 @@ public class EtcdConnector {
     latch.countDown();
   }
 
+  //Extracts the application name from the key name by using the key order list that is configured in application yaml/properties in this project.
   private String extractApplicationName(String modifiedKey, List<KeyPrefix> keyPrefixOrder) {
 
     int applicationIndexInKeyPrefix = keyPrefixOrder.indexOf(KeyPrefix.APPLICATION);
@@ -293,6 +295,7 @@ public class EtcdConnector {
     return "*";
   }
 
+  //Checks whether an ETCD client is configured with necessary connection properties or not.
   private void checkConnection() {
     if (etcdClient == null) {
       throw new EtcdException(
@@ -300,6 +303,7 @@ public class EtcdConnector {
     }
   }
 
+  //Appends application, profile and label in given key order (as the order in application yaml) to group and detect all the key value set that belongs to an application (client) with its environment (e.g. dev, prod etc...)
   private String createSearchPrefixFromApplicationParameters(String application, String profile,
       String label) {
     List<KeyPrefix> keyPrefixOrder = etcdConfigurationProperties.getKeyPrefixOrder();
