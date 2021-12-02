@@ -1,0 +1,55 @@
+version: "3"
+services:
+  etcd-spring-cloud-config-server:
+    container_name: example-etcd-sccs
+    build:
+      context: ./      
+      dockerfile: Dockerfile
+    image: uaskin/etcd-sccs
+    depends_on:
+      - "rabbitmq"
+      - "redis"
+      - "etcd"
+    ports:
+      - 8080:8080
+  spring-cloud-config-client-example:
+    container_name: example-etcd-sccc
+    build:
+      context: ./client-project-executable/      
+      dockerfile: Dockerfile
+    image: uaskin/etcd-sccc
+    depends_on:
+      - "etcd-spring-cloud-config-server"
+    ports:
+      - 8081:8081
+  etcd:
+    image: docker.io/bitnami/etcd:3
+    container_name: example-etcd
+    ports:
+      - 2379:2379
+      - 2380:2380
+    environment:
+      - ETCD_ENABLE_V2=true
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_NAME=etcd
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://example-etcd:2380
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://example-etcd:2379
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster
+      - ETCD_INITIAL_CLUSTER=etcd=http://example-etcd:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+  rabbitmq:
+    image: rabbitmq:3.5
+    container_name: example-rabbitmq
+    ports:
+      - 5672:5672
+      - 15672:15672
+  redis:
+    image: docker.io/bitnami/redis:6.2
+    container_name: example-redis
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+    ports:
+      - 6379:6379  
