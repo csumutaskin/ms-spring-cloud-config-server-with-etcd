@@ -53,3 +53,13 @@ services:
       - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
     ports:
       - 6379:6379  
+  etcd-browser:
+    container_name: example-etcdv3-browser        
+    image: rustyx/etcdv3-browser:latest
+    depends_on:
+      - "etcd"
+    environment:
+      - ETCD=example-etcd:2379
+      - EDITABLE=1 
+    ports:
+      - 9091:8081

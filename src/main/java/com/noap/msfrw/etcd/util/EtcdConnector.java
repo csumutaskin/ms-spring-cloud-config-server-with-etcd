@@ -24,6 +24,7 @@ import io.etcd.jetcd.ClientBuilder;
 import io.etcd.jetcd.KeyValue;
 import io.etcd.jetcd.Watch.Watcher;
 import io.etcd.jetcd.kv.GetResponse;
+import io.etcd.jetcd.kv.PutResponse;
 import io.etcd.jetcd.options.GetOption;
 import io.etcd.jetcd.options.GetOption.Builder;
 import io.etcd.jetcd.options.WatchOption;
@@ -47,13 +48,13 @@ public class EtcdConnector {
   private EtcdWatchLock etcdWatchLock;
   private Boolean watchLockEnabled;
   private EtcdConfigurationProperties etcdConfigurationProperties;
- 
+
   public Client getEtcdClient() {
-	return etcdClient;
+    return etcdClient;
   }
 
   public void setEtcdClient(Client etcdClient) {
-	this.etcdClient = etcdClient;
+    this.etcdClient = etcdClient;
   }
 
   public EtcdConnector(@Nullable EtcdWatchLock etcdWatchLock,
@@ -185,6 +186,35 @@ public class EtcdConnector {
   }
 
   /**
+   * Adds a new key value pair to the ETCD store.
+   *
+   * @return true if key value is added
+   */
+  public boolean addKeyValue(String key, String value) {
+
+    checkConnection();
+    ByteSequence keyBSeq = ByteSequence.from(key.getBytes());
+    ByteSequence valueBSeq = ByteSequence.from(value.getBytes());
+    CompletableFuture<PutResponse> futureResponse =
+        etcdClient.getKVClient().put(keyBSeq, valueBSeq);
+
+    PutResponse response = null;
+    try {
+      response = futureResponse.get();
+    } catch (InterruptedException ie) {
+      logger.warn("An Interruption: ", ie);
+      Thread.currentThread().interrupt();
+    } catch (ExecutionException ee) {
+      String errorMessage = String.format(
+          "An exception occurred while adding key value pair with key: %s to the etcd cluster: %s",
+          key, String.join(",", etcdUrls));
+      throw new EtcdException(errorMessage, ee);
+    }
+    logger.info("Add key value pair to etcd store response is: {}", response);
+    return true;
+  }
+
+  /**
    * A watcher initialization for all keys in the ETCD cluster.
    */
   public synchronized void startListening(EtcdEnvironmentRepository repository) {
@@ -228,7 +258,8 @@ public class EtcdConnector {
     }
   }
 
-  //An inner class that holds a key value change information in itself and has a callback trigger functionality after a change in key value store occurs. 
+  // An inner class that holds a key value change information in itself and has a callback trigger
+  // functionality after a change in key value store occurs.
   private class PropertyChangedConsumer implements Consumer<WatchResponse> {
 
     private EtcdEnvironmentRepository repository;
@@ -248,7 +279,7 @@ public class EtcdConnector {
     }
   }
 
-  //Callback trigger after a property change in ETCD occurs.
+  // Callback trigger after a property change in ETCD occurs.
   private void runCallBackForWatchEvent(List<KeyPrefix> keyPrefixOrder, CountDownLatch latch,
       WatchResponse response, EtcdEnvironmentRepository repository) {
 
@@ -281,7 +312,8 @@ public class EtcdConnector {
     latch.countDown();
   }
 
-  //Extracts the application name from the key name by using the key order list that is configured in application yaml/properties in this project.
+  // Extracts the application name from the key name by using the key order list that is configured
+  // in application yaml/properties in this project.
   private String extractApplicationName(String modifiedKey, List<KeyPrefix> keyPrefixOrder) {
 
     int applicationIndexInKeyPrefix = keyPrefixOrder.indexOf(KeyPrefix.APPLICATION);
@@ -295,7 +327,7 @@ public class EtcdConnector {
     return "*";
   }
 
-  //Checks whether an ETCD client is configured with necessary connection properties or not.
+  // Checks whether an ETCD client is configured with necessary connection properties or not.
   private void checkConnection() {
     if (etcdClient == null) {
       throw new EtcdException(
@@ -303,7 +335,9 @@ public class EtcdConnector {
     }
   }
 
-  //Appends application, profile and label in given key order (as the order in application yaml) to group and detect all the key value set that belongs to an application (client) with its environment (e.g. dev, prod etc...)
+  // Appends application, profile and label in given key order (as the order in application yaml) to
+  // group and detect all the key value set that belongs to an application (client) with its
+  // environment (e.g. dev, prod etc...)
   private String createSearchPrefixFromApplicationParameters(String application, String profile,
       String label) {
     List<KeyPrefix> keyPrefixOrder = etcdConfigurationProperties.getKeyPrefixOrder();
