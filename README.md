@@ -25,23 +25,50 @@ Below image shows how a basic communication is established for configuration man
 
 ![SCCS Network](https://github.com/csumutaskin/project-docs/blob/main/ms-spring-cloud-config-server-with-etcd/Design/UML/NetworkDiagrams/SCCS%20Very%20Basic%20Network%20Diagram.jpg?raw=true)
 
+As clearly seen on the above image, configuration management is simply sending configurations that are located in one (or more) type of configuration stores by the *Spring Cloud Config Server* to all of the Microservices that have a Spring Cloud Config Client nature and have a healthy connection with the Server. Above image does not support the refreshment of the application context of the clients whenever an update occurs in the configuration stores.
+Although scope refreshment is among the capabilities of the Spring Cloud Config architecture, additional tools are required to use it (that I will mention later on).
+
 ### What is special about this current demo project?
 
+Code Repositories contain a lot of examples on Spring Cloud Config Architecture, most of them also contain code about the auto refreshment of properties on config clients. But I met none, with an **"ETCD version 3+" used as configuration store and auto refreshment of config clients are still on but this time "Without the help of Web hooks"** This project aims to find a solution to this problem. And still, as the other open source examples, it does this refreshment process by the help of Spring Cloud Config Bus. 
 
+### What is needed to run this application?
 
+To compile and run this application you need to have:
 
+* [JDK 15](https://jdk.java.net/java-se-ri/15) (You can of course change the compiler version to the installed version on your local environment, but slight modifications might be needed if you do so.)
+* [Maven](https://maven.apache.org/download.cgi)
+* A Java IDE (Preferably but not mandatory)
+* [Docker](https://docs.docker.com/engine/install/ubuntu/) -> to directly see the demonstration
+installed on your system.
+
+### How to run the project?
+
+* Clone the project to your local
+* Run:
+	`mvn clean install`
+* From the root folder of the project where docker-compose file is located run: "docker-compose up"
+The below items will be explained later in detail, but to show how the demonstration acts, you can quickly continue to what is instructed below:
+* Open URL http://localhost:8081/get on your browser, this is the client application end point which returns the value of the configuration key: "value"
+Since initial ETCD store contains no key value pairs, it will directly return its default value: "not assigned yet"
+* Add a new key value to the ETCD using the below endpoint that belongs to the spring cloud config server: 
+  "http://localhost:8080/etcd/add/dev.sample.value/HelloUser"
+  The compose contains an etcd3 browser that can be reachable using the URL: "http://localhost:9091", but I think it throws an unexpected exception when the end user adds a new key value (But editing existing value is always possible). So use the endpoint above (localhost:8080/etcd/add/.....) to add, but you can edit using the tool that runs on port 9091. This tool is taken from [the rustyx's open source project - Copyright (c) 2019 rustyx](https://github.com/rustyx/etcdv3-browser) for non profitable purposes.
+* Whenever value of the key "dev.sample.value" is updated in ETCD, please hit "http://localhost:8081/get" on browser and see how the configuration change affects the Spring Cloud Config Client.
+* Do not forget to shut down the demo using the : docker-compose down --rmi 'all' command to clean the containers and images created by the project.
+	
+### Links you might need throughout the project execution:
+
+* [The client project that displays one of its configuration with key named "value" @ http://localhost:8081/get](http://localhost:8081/get)
+* [ETCD Browser to edit key values @ http://localhost:9091](http://localhost:9091)
+* [To add a new Key Value Pair Use @ http://localhost:8080/etcd/add/key/value](http://localhost:8080/etcd/add/dev.sample.value/umut)
+
+after you run the application.
+
+-------------------------
+Do not forget to add information about:
+* Created container and image files ss, ss on how to use demo application.
+*code cov, test ve build tagleri
 *Currently supports etcd v3 API
-
-docker compose for rabbitmq:
-
-version: '2'
-services:
-  rabbitmq:
-    image: rabbitmq:3.5
-    container_name: 'rabbitmq'
-    ports:
-      - 5672:5672
-      - 15672:15672
-    volumes:
-      - /home/umut/Dev/Docker/Volume/rabbitmq/data/:/var/lib/rabbitmq/
-      - /home/umut/Dev/Docker/Volume/rabbitmq/log/:/var/log/rabbitmq
+*how to add key value using rest end point of the demo project
+*docker compose files for the demo environment.
