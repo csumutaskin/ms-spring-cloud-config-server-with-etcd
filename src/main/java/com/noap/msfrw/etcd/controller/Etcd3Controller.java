@@ -9,6 +9,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import com.noap.msfrw.etcd.util.EtcdConnector;
 
+/**
+ * A controller that controls end points to alter the ETCD cluster this spring cloud config server is connecting to.
+ * This controller actually is not the main aim of this project. But the 3rd party tool that is used for altering ETCD
+ * is lacking the capability to add new keys to the ETCD store. This is the reason that this class is added here.
+ * It can be omitted to focus on the real aim of the project.
+ * 
+ * @author Umut
+ **/
 @Controller
 @RequestMapping("/etcd")
 public class Etcd3Controller {
