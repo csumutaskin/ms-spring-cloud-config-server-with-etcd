@@ -108,22 +108,7 @@ management:
 
 * For all the configurations that should be updated immediately as the key value changes, you need to add @RefreshScope annotation to the bean (or to the method).
 
-package com.noap.restexample.controller;
-
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.context.config.annotation.RefreshScope;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.bind.annotation.RestController;
-
-@RestController
-@RefreshScope
-public class SampleController {
-  @Value("${value:not assigned yet}")
-  private String sampleValue;
-
-  //...
-}
+<script src="https://gist.github.com/csumutaskin/13706b723ff8c30ae58725626a624d65.js"></script>
 
 -------------------------
 Do not forget to add information about:
