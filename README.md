@@ -48,12 +48,12 @@ installed on your system.
 * Run:
 	`mvn clean install`
 * From the root folder of the project where docker-compose file is located run: "docker-compose up"
-The below items will be explained later in detail, but to show how the demonstration acts, you can quickly continue to what is instructed below:
+The below items will be explained later in detail, but to see the outputs of the demo, you can quickly continue to what is instructed below:
 * Open URL http://localhost:8081/get on your browser, this is the client application end point which returns the value of the configuration key: "value"
 Since initial ETCD store contains no key value pairs, it will directly return its default value: "not assigned yet"
 * Add a new key value to the ETCD using the below endpoint that belongs to the spring cloud config server: 
   "http://localhost:8080/etcd/add/dev.sample.value/HelloUser"
-  The compose contains an etcd3 browser that can be reachable using the URL: "http://localhost:9091", but I think it throws an unexpected exception when the end user adds a new key value (But editing existing value is always possible). So use the endpoint above (localhost:8080/etcd/add/.....) to add, but you can edit using the tool that runs on port 9091. This tool is taken from [the rustyx's open source project - Copyright (c) 2019 rustyx](https://github.com/rustyx/etcdv3-browser) for non profitable purposes.
+  The compose contains an etcd3 browser that can be reachable using the URL: "http://localhost:9091", but I think it throws an unexpected exception when the end user adds a new key value (But editing existing value is always possible). So use the endpoint above (localhost:8080/etcd/add/.....) to add, but you can edit using the tool that runs on port 9091. This tool is taken from [the rustyx's open source project (Copyright (c) 2019 rustyx)](https://github.com/rustyx/etcdv3-browser) for non profitable purposes.
 * Whenever value of the key "dev.sample.value" is updated in ETCD, please hit "http://localhost:8081/get" on browser and see how the configuration change affects the Spring Cloud Config Client.
 * Do not forget to shut down the demo using the : docker-compose down --rmi 'all' command to clean the containers and images created by the project.
 	
@@ -65,6 +65,46 @@ Since initial ETCD store contains no key value pairs, it will directly return it
 
 after you run the application.
 
+## How auto refreshing is done using this utility
+
+![Simple Flow](https://github.com/csumutaskin/project-docs/blob/main/ms-spring-cloud-config-server-with-etcd/Design/UML/NetworkDiagrams/Spring%20Cloud%20Config%20With%20Refresh.jpg?raw=true)
+
+* When a Spring Cloud Config Client natured microservice is started/restarted it will try to establish a connection with the Spring Cloud Config Server.   For making the microservice having a proper Spring Cloud Config Client, be sure to:
+    * Enable Actuator end points for the client application, /refresh endpoint might be enough (I will check and edit later) but for demonstration all actuator end points are enabled.
+    * RabbitMQ connection settings should also be included in the application properties.
+    * Spring Cloud Config bus and refresh properties should be also enabled.
+    * Add spring.application.name property for Spring Cloud Config Server to serve the client, its configuration set. 
+    * Do not forget to add the URL of the spring cloud config server to the application properties.
+
+A simple yaml file for a client natured microservice might be as follows: (This is a simple configuration and not suitable for production environment, because there is no security around the actuator end points and all actuator end points are enabled for simplicity below)
+```yaml
+server:
+  port: 8081
+spring:
+  rabbitmq:
+    host: 192.168.1.100
+    port: 5672
+    username: guest
+    passowrd: guest    
+  config:
+    import: "optional:configserver:"
+  cloud:
+    bus:
+      enabled: true
+      refresh:
+        enabled: true
+    config:
+      uri: http://localhost:8080
+  application:
+    name: sample      
+  profiles:
+    active: dev
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"    
+```
 -------------------------
 Do not forget to add information about:
 * Created container and image files ss, ss on how to use demo application.
