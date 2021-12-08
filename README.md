@@ -264,4 +264,3 @@ As stated before it is not mandatory to use the distributed lock, since configur
 
 to be continued:
 ## More on Custom Properties in This Project and What They Do:
-## code cov tags
