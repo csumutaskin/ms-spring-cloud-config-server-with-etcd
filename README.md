@@ -262,5 +262,5 @@ redis:
 	 
 As stated before it is not mandatory to use the distributed lock, since configuration change should not occur frequently in an application.
 
-to be continued:
-## More on Custom Properties in This Project and What They Do:
+## to be continued:
+With Wiki and More on Custom Properties in This Project and What They Do:
