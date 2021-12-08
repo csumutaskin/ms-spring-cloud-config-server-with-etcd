@@ -23,7 +23,7 @@ Spring Cloud Config is a server-client implementation that distribute configurat
 
 Below image shows how a basic communication is established for configuration management that uses Spring Cloud Config Architecture:
 
-![SCCS Network](https://github.com/csumutaskin/project-docs/blob/main/ms-spring-cloud-config-server-with-etcd/Design/UML/NetworkDiagrams/SCCS%20Very%20Basic%20Network%20Diagram.jpg?raw=true)
+![SCCS Very Basic Network Diagram](https://user-images.githubusercontent.com/16647815/145286995-894c06f9-706e-4fb6-9e17-08160c16265b.jpg)
 
 As clearly seen on the above image, configuration management is simply sending configurations that are located in one (or more) type of configuration stores by the *Spring Cloud Config Server* to all of the Microservices that have a Spring Cloud Config Client nature and have a healthy connection with the Server. Above image does not support the refreshment of the application context of the clients whenever an update occurs in the configuration stores.
 Although scope refreshment is among the capabilities of the Spring Cloud Config architecture, additional tools are required to use it (that I will mention later on).
@@ -67,7 +67,7 @@ after you run the application.
 
 ## How auto refreshing is done using this utility
 
-![Simple Flow](https://github.com/csumutaskin/project-docs/blob/main/ms-spring-cloud-config-server-with-etcd/Design/UML/NetworkDiagrams/Spring%20Cloud%20Config%20With%20Refresh.jpg?raw=true)
+![Spring Cloud Config With Refresh](https://user-images.githubusercontent.com/16647815/145287170-f46d8f1b-5608-477d-aca3-cbb9adfa373c.jpg)
 
 ### About Spring Cloud Config Client Implementation (Microservices side)
 
@@ -240,7 +240,7 @@ Details about ETCD v3 API can be read from the [link](https://etcd.io/docs/v3.3/
 
 When the docker-compose up is executed on the root path of the docker compose file, a private network is constructed with the applications running on ports:
 
-![Docker Compose Network](https://github.com/csumutaskin/project-docs/blob/7a6c6c82173d790e680b173210534a5bb6518a48/ms-spring-cloud-config-server-with-etcd/Design/UML/NetworkDiagrams/Docker_Compose_Network.jpg?raw=true)
+![Docker_Compose_Network](https://user-images.githubusercontent.com/16647815/145287274-242a5ad3-4fd9-4531-a3af-f220e1f55fee.jpg)
 
 ## Redis's Necessity and Usage in the Project
 
