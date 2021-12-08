@@ -236,8 +236,30 @@ Details about ETCD v3 API can be read from the [link](https://etcd.io/docs/v3.3/
 
 ## Project's Docker Compose Network Diagram
 
+When the docker-compose up is executed on the root path of the docker compose file, a private network is constructed with the applications running on ports:
+
+Image here...
+
 ## Redis's Necessity and Usage in the Project
 
-## More on Custom Properties in This Project and What They Do:
+Redis acts as a distributed lock to prevent all nodes in the Spring Cloud Config Server to publish the same event for the same key change. It basically puts a self ending (expiring after a certain period of time) distributed lock using the name key value concatenated with the new value of that key. So that whenever the first node to reach the publish stage retrieves the lock publishes the event and the lock expires itself. (I will add an endpoint that releases the lock with the given name, when a not graceful shutdown occurs and lock is still taken by the shutdown node) 
+The lock is defined by the custom property set in the application.yaml:
+    ```yaml
+	redis:
+	  distributedlockEnabled: true
+	  lockWaitTime: 2
+	  lockLeaseTime: 5
+	  urls: 
+    	- "example-redis:6379"
+	 ```   
+	 
+	 distributedlockEnabled: true to enable the lock utility, false otherwise
+	 lockWaitTime: time in seconds for the racing thread to wait for the lock and terminate its functionality (afterwards if it can not take the lock)
+	 lockLeaseTime: time in seconds for the lock winning thread to release the lock automatically.
+	 urls: redis urls with port information to connect to.
+	 
+As stated before it is not mandatory to use the distributed lock, since configuration change should not occur frequently in an application.
 
+to be continued:
+## More on Custom Properties in This Project and What They Do:
 ## code cov tags
