@@ -128,6 +128,52 @@ public class SampleController {
   }
 }
 ```
+
+* Spring Cloud Config Server should also be configured to access the rabbitmq and of course ETCD. I have not met an official/community library that connects Spring Cloud Config Server
+to the ETCD store. Thus, I used the "Custom Repo Definition" solution for Spring Cloud Config Server to read key values from the ETCD store by providing an actual implementation to the
+org.springframework.cloud.config.server.environment.EnvironmentRepository interface. Details will be given later. The application.yaml for the Spring Cloud Config Server is as follows:
+```yaml
+spring:
+  rabbitmq:
+    host: example-rabbitmq
+    port: 5672
+    username: guest
+    password: guest
+  profiles:
+    active: native
+management:
+  security:
+    enabled: false
+etcd:
+  keyPrefixOrder:
+    - profile
+    - application
+    - label
+  httpsEnabled: false
+  urls:
+    - "example-etcd:2379"    
+redis:
+  distributedlockEnabled: true
+  lockWaitTime: 2
+  lockLeaseTime: 5
+  urls: 
+    - "example-redis:6379"
+```
+
+Properties within etcd... are custom properties that establishes the connection to the ETCD store. The ones that begin with "redis" are also custom properties and will be declared later
+on this document, for simplicity, in order to use this utility without a redis connection please make sure that redis.distributedlockEnabled is set to false. Spring Cloud Config
+Server should contain the annotation @EnableConfigServer as below:
+```java
+@SpringBootApplication
+@EnableConfigServer
+
+public class SpringCloudConfigServer {
+  public static void main(String[] args) {
+    SpringApplication.run(SpringCloudConfigServer.class, args);
+  }
+}
+```
+
 -------------------------
 Do not forget to add information about:
 * Created container and image files ss, ss on how to use demo application.
