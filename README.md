@@ -209,25 +209,27 @@ public class EtcdEnvironmentRepository implements EnvironmentRepository {
 * ETCD does not provide an official webhook utility to trigger the monitor end point, but what happens when the watch API of ETCDv3 implemented in Spring Cloud Config server continuously listens to the modifications in ETCD store and internally trigger the event itself w.r.t to the application information (of the altered configuration)? The utility is implemented in 
 EtcdConnector.java within startListening(EtcdEnvironmentRepository repository) method. 
 
-* Two problems still exist:
-    * How to understand which application the altered configuration belongs to: There may be multiple applications that connect to the same Spring Cloud Config Server Cluster, it will be a waste of time and resource for all applications to refresh their configuration data even if the configuration does not belong to them. This was handled easily when storage was a git repository. You might have followed a naming convention for the files of the property sets, and whenever a configuration changes in a file, it will detect its belonging application from the name, profiling would also be easier too, by the help of a well designed folder structure in which each distinguishes the environment in the git repository. 
+Two problems still exist:
+
+1 - How to understand which application the altered configuration belongs to: There may be multiple applications that connect to the same Spring Cloud Config Server Cluster, it will be a waste of time and resource for all applications to refresh their configuration data even if the configuration does not belong to them. This was handled easily when storage was a git repository. You might have followed a naming convention for the files of the property sets, and whenever a configuration changes in a file, it will detect its belonging application from the name, profiling would also be easier too, by the help of a well designed folder structure in which each distinguishes the environment in the git repository. 
     The problem here is solved by defining a naming rule in the application properties of Spring Cloud Config Server and of course by obeying this custom rule when defining the key naming in ETCD store. To be more precise:
     application.yaml contains the below custom property set:
-    ```yaml
-    etcd:
-	  keyPrefixOrder:
-    	- profile
-	    - application
-    	- label
-    ```
-    This set defines what will be order of naming of a key in ETCD store. If the configuration belongs to an application called "sample" (by application.name property in the microservice), and the current client environment is "dev", the value can only be consumed by that client if the key name is "dev.sample.whatevertheinjectedvalueis"
-    If you change the etcd.keyPrefixOrder you have to rename your keys. (And you do not have to use all of them, choose any arbitrary subset among them)
+```yaml
+etcd:
+  keyPrefixOrder:
+    - profile
+    - application
+    - label
+```
+
+This set defines what will be order of naming of a key in ETCD store. If the configuration belongs to an application called "sample" (by application.name property in the microservice), and the current client environment is "dev", the value can only be consumed by that client if the key name is "dev.sample.whatevertheinjectedvalueis"
+If you change the etcd.keyPrefixOrder you have to rename your keys. (And you do not have to use all of them, choose any arbitrary subset among them)
     profile: is the environment where the client is running like dev, qa, prod, custom....
     application: is the name of the application, defined by the property application.name in Config Client side.
     label: in case you need a 3rd distinguisher, any alphanumeric string is possible.
     
-    * What happens when you are running a cluster of Spring Cloud Config Servers for availability? This means each node will have its own watcher and for even a single key change,
-    the bus will broadcast "spring cloud config server node" number of times the same notification. It will not result with an unexpected outcome, however this is time consuming too, this is where the distributed redis lock utility come into the scene. If only one node of Spring Cloud Config Server is running, then it is unnecessary to enable this lock utility, but to decrease the resource cost in a multi node Cloud Server cluster then you may enable it from the application.yaml of the server. More on Redis utility later.
+2 - What happens when you are running a cluster of Spring Cloud Config Servers for availability? This means each node will have its own watcher and for even a single key change,
+the bus will broadcast "spring cloud config server node" number of times the same notification. It will not result with an unexpected outcome, however this is time consuming too, this is where the distributed redis lock utility come into the scene. If only one node of Spring Cloud Config Server is running, then it is unnecessary to enable this lock utility, but to decrease the resource cost in a multi node Cloud Server cluster then you may enable it from the application.yaml of the server. More on Redis utility later.
     
 
 ## ETCD v3 API
@@ -238,20 +240,20 @@ Details about ETCD v3 API can be read from the [link](https://etcd.io/docs/v3.3/
 
 When the docker-compose up is executed on the root path of the docker compose file, a private network is constructed with the applications running on ports:
 
-Image here...
+![Docker Compose Network](https://github.com/csumutaskin/project-docs/blob/7a6c6c82173d790e680b173210534a5bb6518a48/ms-spring-cloud-config-server-with-etcd/Design/UML/NetworkDiagrams/Docker_Compose_Network.jpg?raw=true)
 
 ## Redis's Necessity and Usage in the Project
 
 Redis acts as a distributed lock to prevent all nodes in the Spring Cloud Config Server to publish the same event for the same key change. It basically puts a self ending (expiring after a certain period of time) distributed lock using the name key value concatenated with the new value of that key. So that whenever the first node to reach the publish stage retrieves the lock publishes the event and the lock expires itself. (I will add an endpoint that releases the lock with the given name, when a not graceful shutdown occurs and lock is still taken by the shutdown node) 
 The lock is defined by the custom property set in the application.yaml:
-    ```yaml
-	redis:
-	  distributedlockEnabled: true
-	  lockWaitTime: 2
-	  lockLeaseTime: 5
-	  urls: 
-    	- "example-redis:6379"
-	 ```   
+```yaml
+redis:
+  distributedlockEnabled: true
+  lockWaitTime: 2
+  lockLeaseTime: 5
+  urls: 
+    - "example-redis:6379"
+```   
 	 
 	 distributedlockEnabled: true to enable the lock utility, false otherwise
 	 lockWaitTime: time in seconds for the racing thread to wait for the lock and terminate its functionality (afterwards if it can not take the lock)
