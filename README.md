@@ -69,6 +69,8 @@ after you run the application.
 
 ![Simple Flow](https://github.com/csumutaskin/project-docs/blob/main/ms-spring-cloud-config-server-with-etcd/Design/UML/NetworkDiagrams/Spring%20Cloud%20Config%20With%20Refresh.jpg?raw=true)
 
+### About Spring Cloud Config Client Implementation (Microservices side)
+
 * When a Spring Cloud Config Client natured microservice is started/restarted it will try to establish a connection with the Spring Cloud Config Server.   For making the microservice having a proper Spring Cloud Config Client, be sure to:
     * Enable Actuator end points for the client application, /refresh endpoint might be enough (I will check and edit later) but for demonstration all actuator end points are enabled.
     * RabbitMQ connection settings should also be included in the application properties.
@@ -129,6 +131,8 @@ public class SampleController {
 }
 ```
 
+### About Spring Cloud Config Server Implementation
+
 * Spring Cloud Config Server should also be configured to access the rabbitmq and of course ETCD. I have not met an official/community library that connects Spring Cloud Config Server
 to the ETCD store. Thus, I used the "Custom Repo Definition" solution for Spring Cloud Config Server to read key values from the ETCD store by providing an actual implementation to the
 org.springframework.cloud.config.server.environment.EnvironmentRepository interface. Details will be given later. The application.yaml for the Spring Cloud Config Server is as follows:
@@ -160,7 +164,7 @@ redis:
     - "example-redis:6379"
 ```
 
-Properties within etcd... are custom properties that establishes the connection to the ETCD store. The ones that begin with "redis" are also custom properties and will be declared later
+* Properties within etcd... are custom properties that establishes the connection to the ETCD store. The ones that begin with "redis" are also custom properties and will be declared later
 on this document, for simplicity, in order to use this utility without a redis connection please make sure that redis.distributedlockEnabled is set to false. Spring Cloud Config
 Server should contain the annotation @EnableConfigServer as below:
 ```java
@@ -174,10 +178,66 @@ public class SpringCloudConfigServer {
 }
 ```
 
--------------------------
-Do not forget to add information about:
-* Created container and image files ss, ss on how to use demo application.
-*code cov, test ve build tagleri
-*Currently supports etcd v3 API
-*how to add key value using rest end point of the demo project
-*docker compose files for the demo environment.
+* For Spring Cloud Config server to feed from a custom repository (any kind of persistent store, or even cache (although strongly discouraged :) technically possible) can be used as a possible key value store) It should contain an implementation of the EnvironmentRepository interface and in findOne() method add all the possible key value pairs for the application to the Environment map. This environment map that returns will be consumed by the Spring Cloud Config Clients.
+
+```java
+import org.springframework.cloud.config.server.environment.EnvironmentRepository;
+
+public class EtcdEnvironmentRepository implements EnvironmentRepository {
+  
+  @Override
+  public Environment findOne(String application, String profile, String label) {
+  	//Setup the environment here...
+  }
+}
+```
+
+### The Webhook replacement by the ETCD v3 Watch utility in Spring Cloud Config Server Implementation
+
+* In order to trigger the automatic refreshment of the properties Spring Cloud Config Server uses Spring Cloud Bus project to trigger an event for all the subscriber config clients to listen and after that use their actuator refresh end points to re-fetch the new configuration data set from the server.
+
+* Spring Cloud Bus can use Kafka, Redis or RabbitMQ as the delivery bus structure (or a custom implementation). But among the current community artifacts Redis connector seems to be obsolete, so, Kafka and RabbitMQ are preferred instead. pom.xml of this project contains artifacts needed for Spring Cloud Config Server to connect to the bus.
+
+* Spring Cloud Config Architecture uses 3 different ways to refresh the configurations:
+    * **/actuator/refresh:** triggered from the config client, and fetches the new configuration set only for that client.
+    * **/actuator/bus-refresh:** triggered from the config client, but this time a refresh event is broadcasted using the Spring Cloud Bus, and it notifies all the subscribed clients
+	to re-fetch their configurations.
+    * **/monitor:** This is part of the [Spring Cloud Config Monitor](https://github.com/spring-cloud/spring-cloud-config/tree/main/spring-cloud-config-monitor) project attached to the Spring Cloud Config Server. It is triggered from the server and as the /actuator/bus-refresh end point, a broadcasted message by the Spring Cloud Bus notifies all the subscribed clients to re-fetch their configurations.
+
+* /monitor end point is used by the webhooks mechanism provided by git repositories. When any modification is done on property files in storage, git triggers a web hook which is actually calling the monitor end point of the spring cloud monitor. This will trigger the refreshment process.
+
+* ETCD does not provide an official webhook utility to trigger the monitor end point, but what happens when the watch API of ETCDv3 implemented in Spring Cloud Config server continuously listens to the modifications in ETCD store and internally trigger the event itself w.r.t to the application information (of the altered configuration)? The utility is implemented in 
+EtcdConnector.java within startListening(EtcdEnvironmentRepository repository) method. 
+
+* Two problems still exist:
+    * How to understand which application the altered configuration belongs to: There may be multiple applications that connect to the same Spring Cloud Config Server Cluster, it will be a waste of time and resource for all applications to refresh their configuration data even if the configuration does not belong to them. This was handled easily when storage was a git repository. You might have followed a naming convention for the files of the property sets, and whenever a configuration changes in a file, it will detect its belonging application from the name, profiling would also be easier too, by the help of a well designed folder structure in which each distinguishes the environment in the git repository. 
+    The problem here is solved by defining a naming rule in the application properties of Spring Cloud Config Server and of course by obeying this custom rule when defining the key naming in ETCD store. To be more precise:
+    application.yaml contains the below custom property set:
+    ```yaml
+    etcd:
+	  keyPrefixOrder:
+    	- profile
+	    - application
+    	- label
+    ```
+    This set defines what will be order of naming of a key in ETCD store. If the configuration belongs to an application called "sample" (by application.name property in the microservice), and the current client environment is "dev", the value can only be consumed by that client if the key name is "dev.sample.whatevertheinjectedvalueis"
+    If you change the etcd.keyPrefixOrder you have to rename your keys. (And you do not have to use all of them, choose any arbitrary subset among them)
+    profile: is the environment where the client is running like dev, qa, prod, custom....
+    application: is the name of the application, defined by the property application.name in Config Client side.
+    label: in case you need a 3rd distinguisher, any alphanumeric string is possible.
+    
+    * What happens when you are running a cluster of Spring Cloud Config Servers for availability? This means each node will have its own watcher and for even a single key change,
+    the bus will broadcast "spring cloud config server node" number of times the same notification. It will not result with an unexpected outcome, however this is time consuming too, this is where the distributed redis lock utility come into the scene. If only one node of Spring Cloud Config Server is running, then it is unnecessary to enable this lock utility, but to decrease the resource cost in a multi node Cloud Server cluster then you may enable it from the application.yaml of the server. More on Redis utility later.
+    
+
+## ETCD v3 API
+
+Details about ETCD v3 API can be read from the [link](https://etcd.io/docs/v3.3/rfc/)
+
+## Project's Docker Compose Network Diagram
+
+## Redis's Necessity and Usage in the Project
+
+## More on Custom Properties in This Project and What They Do:
+
+## code cov tags
