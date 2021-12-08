@@ -15,7 +15,7 @@ Spring framework provides various ways to handle configuration management. The o
 
 The demo project uses ETCD as the configuration store. ETCD is an open source distributed key value store which is resided in the "Control Plane" of Kubernetes Components and which are easily accessible by any nodes in the Kubernetes cluster through the API provided. [This](https://etcd.io/docs/) link shows detailed information on ETCD.
 
-### What this project is about?
+### What this project is about
 
 This project is a Spring Cloud Config Server implementation that uses ETCD as the configuration management store, so that high availability can be established by using its distributed nature. For many Devops teams, kubernetes has become the defacto standart when an orchestration tool is necessary, and ETCD can be considered as one of the subcomponents this technology.
 
@@ -42,7 +42,7 @@ To compile and run this application you need to have:
 * [Docker](https://docs.docker.com/engine/install/ubuntu/) -> to directly see the demonstration
 installed on your system.
 
-### How to run the project?
+### How to run the project
 
 * Clone the project to your local
 * Run:
